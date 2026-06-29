@@ -8,7 +8,7 @@ import { useWishlistStore } from "@/store/useWishlistStore"
 import CartDrawer from "@/components/store/CartDrawer"
 import SearchModal from "@/components/store/SearchModal"
 
-export default function Navbar() {
+export default function Navbar({ freeShippingThreshold = 1000 }: { freeShippingThreshold?: number }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const itemCount = useCartStore((s) => s.items.reduce((acc, i) => acc + i.quantity, 0))
@@ -18,7 +18,7 @@ export default function Navbar() {
     <>
       {/* Announcement Bar */}
       <div className="bg-drip-black text-drip-surface text-center py-2 text-xs md:text-sm font-medium tracking-wide overflow-hidden">
-        <p className="whitespace-nowrap">Free delivery on orders above ৳1000 🚚</p>
+        <p className="whitespace-nowrap">Free delivery on orders above ৳{freeShippingThreshold} 🚚</p>
       </div>
 
       <header className="sticky top-0 z-50 w-full border-b border-drip-border bg-drip-surface/80 backdrop-blur-md">
@@ -69,7 +69,7 @@ export default function Navbar() {
               <User className="w-5 h-5 md:w-6 md:h-6" />
             </Link>
 
-            <CartDrawer itemCount={itemCount} />
+            <CartDrawer itemCount={itemCount} freeShippingThreshold={freeShippingThreshold} />
           </div>
 
         </div>

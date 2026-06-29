@@ -105,11 +105,21 @@ export default function VariantSelector({ product }: { product: any }) {
                   key={size}
                   onClick={() => setSelectedSize(size)}
                   disabled={!hasStock}
-                  className={`relative py-3 flex items-center justify-center border text-xs font-medium transition-all duration-300
+                  className={`relative flex flex-col items-center justify-center border transition-all duration-300 h-14
                     ${isActive ? 'border-drip-black bg-drip-black text-white' : 'border-drip-border bg-white text-drip-black hover:border-drip-black'}
                     ${!hasStock ? 'opacity-40 cursor-not-allowed bg-drip-muted' : ''}`}
                 >
-                  {size}
+                  <span className="text-xs font-medium">{size}</span>
+                  {hasStock && specificVariant.stock <= 5 && (
+                    <span className={`text-[10px] mt-0.5 ${isActive ? 'text-drip-muted' : 'text-drip-error'}`}>
+                      {specificVariant.stock} left
+                    </span>
+                  )}
+                  {hasStock && specificVariant.stock > 5 && isActive && (
+                    <span className="text-[10px] mt-0.5 text-drip-muted">
+                      In stock
+                    </span>
+                  )}
                   {!hasStock && (
                     <div className="absolute inset-0 w-full h-full border-t border-drip-border transform rotate-12 pointer-events-none" />
                   )}

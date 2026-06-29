@@ -5,6 +5,7 @@ import { useSession, signOut } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { User, Package, MapPin, Gift, LogOut } from "lucide-react"
 import { toast } from "sonner"
+import AddressList from "@/components/store/account/AddressList"
 
 export default function AccountPage() {
   const { data: session, status } = useSession()
@@ -207,14 +208,7 @@ export default function AccountPage() {
           )}
 
           {activeTab === "addresses" && (
-            <div className="space-y-6">
-              <h2 className="text-2xl font-heading font-bold mb-6">Saved Addresses</h2>
-              <div className="text-center py-16 text-drip-text-muted">
-                <MapPin className="w-12 h-12 mx-auto text-drip-border mb-4" />
-                <p>No saved addresses yet.</p>
-                <p className="text-sm mt-1">Addresses are saved when you place an order.</p>
-              </div>
-            </div>
+            <AddressList />
           )}
 
           {activeTab === "loyalty" && (

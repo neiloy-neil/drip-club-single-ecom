@@ -8,7 +8,7 @@ import Link from "next/link"
 import { useState } from "react"
 import { Switch } from "@/components/ui/switch"
 
-export default function CartDrawer({ itemCount: propItemCount }: { itemCount?: number }) {
+export default function CartDrawer({ itemCount: propItemCount, freeShippingThreshold = 1000 }: { itemCount?: number, freeShippingThreshold?: number }) {
   const { items, removeItem, updateQuantity } = useCartStore()
   const [isOpen, setIsOpen] = useState(false)
   const [coupon, setCoupon] = useState("")
@@ -42,12 +42,12 @@ export default function CartDrawer({ itemCount: propItemCount }: { itemCount?: n
           {/* Free Shipping Progress */}
           <div className="mt-4 space-y-2">
             <p className="text-xs text-drip-text-muted">
-              {subtotal >= 1000 ? "You've unlocked free shipping!" : `Add ৳${1000 - subtotal} more for free shipping`}
+              {subtotal >= freeShippingThreshold ? "You've unlocked free shipping!" : `Add ৳${freeShippingThreshold - subtotal} more for free shipping`}
             </p>
             <div className="w-full h-1 bg-drip-muted rounded-full overflow-hidden">
               <div 
                 className="h-full bg-drip-gold transition-all duration-500"
-                style={{ width: `${Math.min(100, (subtotal / 1000) * 100)}%` }}
+                style={{ width: `${Math.min(100, (subtotal / freeShippingThreshold) * 100)}%` }}
               />
             </div>
           </div>
