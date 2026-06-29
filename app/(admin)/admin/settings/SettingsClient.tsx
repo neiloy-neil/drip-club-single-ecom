@@ -1,0 +1,238 @@
+"use client"
+
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+
+type Staff = {
+  id: string
+  name: string
+  email: string
+  role: string
+}
+
+export function SettingsClient({
+  initialSettings,
+  initialStaff,
+}: {
+  initialSettings: Record<string, string>
+  initialStaff: Staff[]
+}) {
+  const router = useRouter()
+
+  const [storeName, setStoreName] = useState(initialSettings["store_name"] || "")
+  const [freeShippingThreshold, setFreeShippingThreshold] = useState(initialSettings["free_shipping_above"] || "")
+  const [bkashNumber, setBkashNumber] = useState(initialSettings["bkash_merchant_number"] || "")
+  const [nagadNumber, setNagadNumber] = useState(initialSettings["nagad_merchant_number"] || "")
+  const [isSaving, setIsSaving] = useState(false)
+
+  const [inviteEmail, setInviteEmail] = useState("")
+  const [inviteRole, setInviteRole] = useState("STAFF")
+  const [isInviteOpen, setIsInviteOpen] = useState(false)
+
+  const handleSaveSettings = async () => {
+    setIsSaving(true)
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          settings: {
+            store_name: storeName,
+            free_shipping_above: freeShippingThreshold,
+            bkash_merchant_number: bkashNumber,
+            nagad_merchant_number: nagadNumber,
+          },
+        }),
+      })
+      if (res.ok) {
+        toast.success("Settings saved successfully")
+        router.refresh()
+      } else {
+        toast.error("Failed to save settings")
+      }
+    } catch {
+      toast.error("Error saving settings")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleInvite = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      const res = await fetch("/api/admin/settings/staff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
+      })
+      if (res.ok) {
+        toast.success(`Staff member added successfully`)
+        setIsInviteOpen(false)
+        setInviteEmail("")
+        router.refresh()
+      } else {
+        const d = await res.json()
+        toast.error(d.error || "Failed to add staff member")
+      }
+    } catch {
+      toast.error("Error adding staff member")
+    }
+  }
+
+  const handleRoleChange = async (id: string, newRole: string) => {
+    try {
+      const res = await fetch(`/api/admin/settings/staff/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: newRole }),
+      })
+      if (res.ok) {
+        toast.success("Role updated")
+        router.refresh()
+      } else {
+        toast.error("Failed to update role")
+      }
+    } catch {
+      toast.error("Error updating role")
+    }
+  }
+
+  const handleRemoveStaff = async (id: string, name: string) => {
+    if (!confirm(`Remove ${name}'s staff access? They will become a regular customer.`)) return
+    try {
+      const res = await fetch(`/api/admin/settings/staff/${id}`, { method: "DELETE" })
+      if (res.ok) {
+        toast.success("Staff member removed")
+        router.refresh()
+      } else {
+        toast.error("Failed to remove staff member")
+      }
+    } catch {
+      toast.error("Error removing staff member")
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>General Store Information</CardTitle>
+          <CardDescription>Update your store's basic information and configurations.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 max-w-2xl">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Store Name</label>
+            <Input value={storeName} onChange={(e) => setStoreName(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Currency</label>
+            <Input value="BDT (৳)" disabled />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Free Shipping Threshold (৳)</label>
+            <Input type="number" min="0" value={freeShippingThreshold} onChange={(e) => setFreeShippingThreshold(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">bKash Merchant Number</label>
+              <Input value={bkashNumber} onChange={(e) => setBkashNumber(e.target.value)} placeholder="01XXXXXXXXX" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Nagad Merchant Number</label>
+              <Input value={nagadNumber} onChange={(e) => setNagadNumber(e.target.value)} placeholder="01XXXXXXXXX" />
+            </div>
+          </div>
+          <Button onClick={handleSaveSettings} disabled={isSaving}>
+            {isSaving ? "Saving..." : "Save Changes"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Staff Management</CardTitle>
+            <CardDescription>Manage administrators and staff members.</CardDescription>
+          </div>
+          <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
+            <DialogTrigger render={<Button>Add Staff Member</Button>} />
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add a Staff Member</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleInvite} className="space-y-4 mt-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Email Address</label>
+                  <Input required type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="staff@example.com" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Role</label>
+                  <Select value={inviteRole} onValueChange={(val) => setInviteRole(val || "STAFF")}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="STAFF">Staff (Limited Access)</SelectItem>
+                      <SelectItem value="ADMIN">Administrator (Full Access)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button type="submit" className="w-full">Add Staff Member</Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-md border bg-white dark:bg-neutral-950">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {initialStaff.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="h-16 text-center text-muted-foreground">No staff members yet.</TableCell>
+                  </TableRow>
+                ) : (
+                  initialStaff.map((staff) => (
+                    <TableRow key={staff.id}>
+                      <TableCell className="font-medium">{staff.name}</TableCell>
+                      <TableCell>{staff.email}</TableCell>
+                      <TableCell>
+                        <Select value={staff.role} onValueChange={(val) => handleRoleChange(staff.id, val || "")}>
+                          <SelectTrigger className="w-[120px] h-8 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="STAFF">Staff</SelectItem>
+                            <SelectItem value="ADMIN">Admin</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="destructive" size="sm" onClick={() => handleRemoveStaff(staff.id, staff.name)}>
+                          Remove
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}

@@ -1,0 +1,158 @@
+"use client"
+
+import { useCartStore } from "@/store/useCartStore"
+import { Trash2, Minus, Plus, ShoppingBag, ShieldCheck, ArrowRight } from "lucide-react"
+import Link from "next/link"
+import { useState } from "react"
+import { Switch } from "@/components/ui/switch"
+
+export default function CartPage() {
+  const { items, removeItem, updateQuantity } = useCartStore()
+  const [coupon, setCoupon] = useState("")
+  const [useLoyalty, setUseLoyalty] = useState(false)
+
+  const subtotal = items.reduce((acc, item) => acc + (item.price * item.quantity), 0)
+  const loyaltyPoints = 0 // Fetched at checkout when user is authenticated
+  const loyaltyValue = useLoyalty ? Math.min(loyaltyPoints * 0.1, subtotal * 0.2) : 0
+  const finalTotal = subtotal - loyaltyValue
+
+  if (items.length === 0) {
+    return (
+      <div className="container mx-auto px-4 py-24 md:py-32 flex flex-col items-center justify-center text-center animate-in fade-in duration-500">
+        <div className="w-24 h-24 rounded-full bg-drip-muted flex items-center justify-center text-drip-border mb-8">
+          <ShoppingBag className="w-10 h-10" />
+        </div>
+        <h1 className="text-4xl md:text-5xl font-heading font-bold text-drip-black mb-4">Your Bag is Empty</h1>
+        <p className="text-drip-text-muted max-w-md mb-8">
+          Looks like you haven't added anything to your bag yet. Let's get you started with our latest arrivals.
+        </p>
+        <Link href="/shop">
+          <button className="px-8 py-4 bg-drip-black text-white font-bold uppercase tracking-widest rounded-full hover:bg-drip-gold hover:shadow-lg hover:shadow-drip-gold/20 transition-all duration-300">
+            Shop New Arrivals
+          </button>
+        </Link>
+      </div>
+    )
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-12 md:py-16 animate-in fade-in duration-500">
+      <h1 className="text-4xl md:text-5xl font-heading font-bold text-drip-black mb-2">Your Bag</h1>
+      <p className="text-sm text-drip-text-muted mb-8 uppercase tracking-widest font-medium">{items.length} Items</p>
+
+      <div className="flex flex-col lg:flex-row gap-12 lg:gap-16">
+        
+        {/* Cart Items */}
+        <div className="lg:w-2/3 space-y-8">
+          {items.map((item) => (
+            <div key={item.variantId} className="flex gap-6 border-b border-drip-border pb-8">
+              <Link href={`/shop/${item.productSlug}`} className="w-32 md:w-40 aspect-[3/4] shrink-0 bg-drip-muted rounded-md overflow-hidden block">
+                <img src={item.image || "/placeholder.jpg"} alt={item.name} className="w-full h-full object-cover" />
+              </Link>
+              
+              <div className="flex-1 flex flex-col justify-between py-2">
+                <div className="flex flex-col md:flex-row md:justify-between gap-2">
+                  <div>
+                    <h3 className="font-heading font-bold text-lg md:text-xl line-clamp-2 hover:text-drip-gold transition-colors">
+                      <Link href={`/shop/${item.productSlug}`}>{item.name}</Link>
+                    </h3>
+                    <p className="text-sm text-drip-text-muted mt-2">Color: {item.color}</p>
+                    <p className="text-sm text-drip-text-muted mt-1">Size: {item.size}</p>
+                  </div>
+                  <p className="font-mono font-bold text-lg">৳{(item.price * item.quantity).toLocaleString()}</p>
+                </div>
+                
+                <div className="flex items-end justify-between mt-6">
+                  <div className="flex items-center border border-drip-border rounded-full overflow-hidden">
+                    <button 
+                      className="px-4 py-2 text-drip-text-muted hover:bg-drip-muted hover:text-drip-black transition-colors"
+                      onClick={() => updateQuantity(item.variantId, Math.max(1, item.quantity - 1))}
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                    <span className="w-8 text-center text-sm font-medium">{item.quantity}</span>
+                    <button 
+                      className="px-4 py-2 text-drip-text-muted hover:bg-drip-muted hover:text-drip-black transition-colors"
+                      onClick={() => updateQuantity(item.variantId, item.quantity + 1)}
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                  
+                  <button 
+                    onClick={() => removeItem(item.variantId)} 
+                    className="text-sm text-drip-text-muted underline underline-offset-4 hover:text-drip-error transition-colors flex items-center gap-1"
+                  >
+                    <Trash2 className="w-4 h-4" /> Remove
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Order Summary */}
+        <div className="lg:w-1/3">
+          <div className="bg-drip-surface border border-drip-border rounded-2xl p-6 md:p-8 sticky top-24">
+            <h2 className="text-2xl font-heading font-bold mb-6">Order Summary</h2>
+            
+            <div className="space-y-4 mb-6">
+              <div className="flex items-center gap-2 border border-drip-border rounded-lg bg-drip-muted/30 p-1">
+                <input 
+                  type="text" 
+                  placeholder="Promo Code" 
+                  value={coupon}
+                  onChange={(e) => setCoupon(e.target.value)}
+                  className="flex-1 bg-transparent px-3 text-sm focus:outline-none placeholder:text-drip-text-muted"
+                />
+                <button className="bg-drip-black text-white text-xs font-bold uppercase tracking-widest px-4 py-3 rounded-md hover:bg-drip-gold transition-colors">
+                  Apply
+                </button>
+              </div>
+              
+              <div className="flex items-center justify-between border border-drip-border rounded-lg bg-drip-muted/30 p-4">
+                <div>
+                  <p className="text-sm font-bold">Use DRIP Club Points</p>
+                  <p className="text-xs text-drip-text-muted mt-1">Available: {loyaltyPoints} (৳{(loyaltyPoints * 0.1).toLocaleString()})</p>
+                </div>
+                <Switch checked={useLoyalty} onCheckedChange={setUseLoyalty} />
+              </div>
+            </div>
+
+            <div className="space-y-4 text-sm mb-6 border-b border-drip-border pb-6">
+              <div className="flex justify-between">
+                <span className="text-drip-text-muted">Subtotal</span>
+                <span className="font-mono">৳{subtotal.toLocaleString()}</span>
+              </div>
+              {useLoyalty && (
+                <div className="flex justify-between text-drip-success font-medium">
+                  <span>Loyalty Discount</span>
+                  <span className="font-mono">-৳{loyaltyValue.toLocaleString()}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-drip-text-muted">Shipping</span>
+                <span className="font-mono">{subtotal >= 1000 ? "Free" : "Calculated at checkout"}</span>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center mb-8">
+              <span className="text-xl font-bold">Total</span>
+              <span className="font-mono text-2xl font-bold">৳{finalTotal.toLocaleString()}</span>
+            </div>
+
+            <Link href="/checkout" className="block w-full">
+              <button className="w-full py-4 bg-drip-black text-white font-bold uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-drip-gold hover:shadow-lg hover:shadow-drip-gold/20 transition-all duration-300 rounded-full">
+                Checkout <ArrowRight className="w-4 h-4" />
+              </button>
+            </Link>
+            
+            <div className="mt-6 pt-6 border-t border-drip-border flex items-center justify-center gap-2 text-xs text-drip-text-muted">
+              <ShieldCheck className="w-4 h-4" /> Secure SSL Encrypted Checkout
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -1,0 +1,240 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { useSession, signOut } from "next-auth/react"
+import { useRouter } from "next/navigation"
+import { User, Package, MapPin, Gift, LogOut } from "lucide-react"
+import { toast } from "sonner"
+
+export default function AccountPage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
+  const [activeTab, setActiveTab] = useState("orders")
+  const [orders, setOrders] = useState<any[]>([])
+  const [loyaltyBalance, setLoyaltyBalance] = useState(0)
+  const [ordersLoading, setOrdersLoading] = useState(true)
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/login?callbackUrl=/account")
+    }
+  }, [status, router])
+
+  // Fetch orders
+  useEffect(() => {
+    if (status !== "authenticated") return
+    fetch("/api/account/orders")
+      .then(r => r.json())
+      .then(d => { setOrders(d.orders || []); setOrdersLoading(false) })
+      .catch(() => setOrdersLoading(false))
+  }, [status])
+
+  // Fetch loyalty balance
+  useEffect(() => {
+    if (status !== "authenticated") return
+    fetch("/api/account/loyalty")
+      .then(r => r.json())
+      .then(d => setLoyaltyBalance(d.balance || 0))
+      .catch(() => {})
+  }, [status])
+
+  async function handleSignOut() {
+    await signOut({ callbackUrl: "/" })
+  }
+
+  async function handleSaveProfile(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    toast.success("Profile updated successfully")
+  }
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-drip-black border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (!session) return null
+
+  const user = session.user
+  const firstName = user?.name?.split(" ")[0] || "there"
+
+  return (
+    <div className="container mx-auto px-4 py-12 md:py-16 max-w-6xl animate-in fade-in duration-500">
+      <div className="mb-12">
+        <h1 className="text-4xl font-heading font-bold text-drip-black mb-2">My Account</h1>
+        <p className="text-drip-text-muted">Welcome back, {firstName}</p>
+      </div>
+
+      <div className="flex flex-col md:flex-row gap-8 md:gap-12">
+
+        {/* Sidebar Nav */}
+        <div className="w-full md:w-64 shrink-0 space-y-1">
+          {[
+            { key: "orders", label: "My Orders", icon: Package },
+            { key: "profile", label: "Profile Details", icon: User },
+            { key: "addresses", label: "Saved Addresses", icon: MapPin },
+          ].map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key)}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                activeTab === key ? "bg-drip-black text-white" : "hover:bg-drip-muted text-drip-text-muted hover:text-drip-black"
+              }`}
+            >
+              <Icon className="w-4 h-4" /> {label}
+            </button>
+          ))}
+          <button
+            onClick={() => setActiveTab("loyalty")}
+            className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === "loyalty" ? "bg-drip-black text-white" : "hover:bg-drip-muted text-drip-text-muted hover:text-drip-black"
+            }`}
+          >
+            <div className="flex items-center gap-3"><Gift className="w-4 h-4" /> DRIP Club</div>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${activeTab === "loyalty" ? "bg-white text-drip-black" : "bg-drip-gold text-white"}`}>
+              {loyaltyBalance} pt
+            </span>
+          </button>
+          <div className="pt-8 mt-8 border-t border-drip-border">
+            <button
+              onClick={handleSignOut}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-drip-error hover:bg-drip-error/10 transition-colors"
+            >
+              <LogOut className="w-4 h-4" /> Sign Out
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1">
+          {activeTab === "orders" && (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-heading font-bold mb-6">Order History</h2>
+              {ordersLoading ? (
+                <div className="text-drip-text-muted text-sm">Loading orders...</div>
+              ) : orders.length === 0 ? (
+                <div className="text-center py-16 space-y-4">
+                  <Package className="w-12 h-12 mx-auto text-drip-border" />
+                  <p className="text-drip-text-muted">No orders yet. Time to shop!</p>
+                  <button
+                    onClick={() => router.push("/shop")}
+                    className="mt-2 px-6 py-3 bg-drip-black text-white font-bold uppercase tracking-widest rounded-full hover:bg-drip-gold transition-colors text-xs"
+                  >
+                    Browse Shop
+                  </button>
+                </div>
+              ) : (
+                orders.map((order: any) => (
+                  <div key={order.id} className="border border-drip-border rounded-2xl overflow-hidden bg-white">
+                    <div className="bg-drip-muted/30 px-6 py-4 flex flex-wrap items-center justify-between gap-4 border-b border-drip-border text-sm">
+                      <div>
+                        <p className="text-xs text-drip-text-muted uppercase tracking-widest font-bold">Order Placed</p>
+                        <p className="font-medium mt-0.5">{new Date(order.createdAt).toLocaleDateString("en-BD")}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-drip-text-muted uppercase tracking-widest font-bold">Total</p>
+                        <p className="font-medium mt-0.5">৳{Number(order.total).toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-drip-text-muted uppercase tracking-widest font-bold">Status</p>
+                        <p className="font-medium text-drip-gold mt-0.5">{order.status}</p>
+                      </div>
+                      <div className="flex-1 text-right">
+                        <p className="text-xs text-drip-text-muted uppercase tracking-widest font-bold">Order #</p>
+                        <p className="font-mono mt-0.5">{order.orderNumber}</p>
+                      </div>
+                    </div>
+                    {order.items?.slice(0, 1).map((item: any) => (
+                      <div key={item.id} className="p-6 flex gap-4">
+                        <div className="w-20 h-24 bg-drip-muted rounded-md shrink-0 overflow-hidden">
+                          {item.product?.images?.[0]?.url && (
+                            <img src={item.product.images[0].url} alt={item.productName} className="w-full h-full object-cover" />
+                          )}
+                        </div>
+                        <div>
+                          <h4 className="font-medium text-drip-black">{item.productName}</h4>
+                          <p className="text-sm text-drip-text-muted mt-1">Size: {item.size} | Color: {item.color}</p>
+                          <p className="text-sm font-mono mt-1">৳{Number(item.price).toLocaleString()} × {item.quantity}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {activeTab === "profile" && (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-heading font-bold mb-6">Profile Details</h2>
+              <form className="max-w-md space-y-4" onSubmit={handleSaveProfile}>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-widest text-drip-text-muted">Full Name</label>
+                  <input defaultValue={user?.name || ""} className="w-full bg-drip-muted border border-transparent focus:border-drip-gold focus:bg-white rounded-lg px-4 py-3 text-sm outline-none transition-all" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-widest text-drip-text-muted">Email Address</label>
+                  <input defaultValue={user?.email || ""} disabled className="w-full bg-drip-muted border border-transparent rounded-lg px-4 py-3 text-sm outline-none opacity-60 cursor-not-allowed" />
+                  <p className="text-xs text-drip-text-muted">Email cannot be changed.</p>
+                </div>
+                <div className="pt-4">
+                  <button type="submit" className="px-6 py-3 bg-drip-black text-white font-bold uppercase tracking-widest rounded-full hover:bg-drip-gold transition-colors text-xs">
+                    Save Changes
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {activeTab === "addresses" && (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-heading font-bold mb-6">Saved Addresses</h2>
+              <div className="text-center py-16 text-drip-text-muted">
+                <MapPin className="w-12 h-12 mx-auto text-drip-border mb-4" />
+                <p>No saved addresses yet.</p>
+                <p className="text-sm mt-1">Addresses are saved when you place an order.</p>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "loyalty" && (
+            <div className="space-y-8">
+              <h2 className="text-2xl font-heading font-bold">DRIP Club Rewards</h2>
+              <div className="bg-drip-black text-white rounded-3xl p-8 md:p-12 relative overflow-hidden">
+                <div className="absolute right-0 top-0 w-64 h-64 bg-drip-gold/20 rounded-full blur-3xl" />
+                <div className="relative z-10">
+                  <p className="text-drip-text-muted uppercase tracking-widest text-xs font-bold mb-2">Available Points</p>
+                  <h3 className="text-5xl font-mono font-bold text-drip-gold mb-6">{loyaltyBalance}</h3>
+                  <p className="text-sm text-gray-300 max-w-sm">
+                    {loyaltyBalance > 0
+                      ? <>You have enough points to get <span className="text-white font-bold">৳{(loyaltyBalance * 0.1).toFixed(0)} off</span> your next purchase.</>
+                      : "Start shopping to earn DRIP Club points!"}
+                  </p>
+                </div>
+              </div>
+              <div>
+                <h3 className="font-bold mb-4">How it works</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {[
+                    { step: "1", title: "Shop", desc: "Earn 1 point for every ৳10 spent on our store." },
+                    { step: "2", title: "Collect", desc: "Points are automatically added after delivery." },
+                    { step: "3", title: "Redeem", desc: "Apply points at checkout for instant discounts." },
+                  ].map(({ step, title, desc }) => (
+                    <div key={step} className="p-6 border border-drip-border rounded-2xl bg-white">
+                      <div className="w-10 h-10 bg-drip-gold/10 text-drip-gold rounded-full flex items-center justify-center mb-4 font-bold">{step}</div>
+                      <h4 className="font-bold text-sm mb-2">{title}</h4>
+                      <p className="text-xs text-drip-text-muted">{desc}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
