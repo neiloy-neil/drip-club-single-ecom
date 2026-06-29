@@ -62,11 +62,11 @@ export async function redeemPoints(userId: string, pointsToRedeem: number) {
 }
 
 export async function getBalance(userId: string) {
-  const points = await prisma.loyaltyPoint.findMany({
-    where: { userId }
+  const result = await prisma.loyaltyPoint.aggregate({
+    where: { userId },
+    _sum: { points: true },
   })
-  
-  return points.reduce((sum, entry) => sum + entry.points, 0)
+  return result._sum.points ?? 0
 }
 
 export async function getHistory(userId: string) {

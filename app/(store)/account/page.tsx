@@ -45,7 +45,24 @@ export default function AccountPage() {
 
   async function handleSaveProfile(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    toast.success("Profile updated successfully")
+    const form = e.currentTarget
+    const name = (form.elements.namedItem("name") as HTMLInputElement)?.value?.trim()
+    if (!name) return
+    try {
+      const res = await fetch("/api/account/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      })
+      if (res.ok) {
+        toast.success("Profile updated successfully")
+      } else {
+        const d = await res.json()
+        toast.error(d.error || "Failed to update profile")
+      }
+    } catch {
+      toast.error("Error updating profile")
+    }
   }
 
   if (status === "loading") {
@@ -173,7 +190,7 @@ export default function AccountPage() {
               <form className="max-w-md space-y-4" onSubmit={handleSaveProfile}>
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold uppercase tracking-widest text-drip-text-muted">Full Name</label>
-                  <input defaultValue={user?.name || ""} className="w-full bg-drip-muted border border-transparent focus:border-drip-gold focus:bg-white rounded-lg px-4 py-3 text-sm outline-none transition-all" />
+                  <input name="name" defaultValue={user?.name || ""} className="w-full bg-drip-muted border border-transparent focus:border-drip-gold focus:bg-white rounded-lg px-4 py-3 text-sm outline-none transition-all" />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold uppercase tracking-widest text-drip-text-muted">Email Address</label>

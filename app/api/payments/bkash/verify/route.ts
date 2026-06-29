@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { queryPayment } from "@/lib/bkash"
 import { awardPoints } from "@/lib/loyalty"
+import { auth } from "@/lib/auth"
 
 export async function POST(req: Request) {
   try {
@@ -14,6 +15,12 @@ export async function POST(req: Request) {
     const order = await prisma.order.findUnique({
       where: { id: orderId }
     })
+
+    // Verify the caller owns this order (or is admin)
+    const session = await auth()
+    if (!order || (order.userId && order.userId !== session?.user?.id && session?.user?.role !== "ADMIN")) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 })
+    }
 
     if (!order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 })

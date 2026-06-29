@@ -35,6 +35,14 @@ export function SettingsClient({
   const [nagadNumber, setNagadNumber] = useState(initialSettings["nagad_merchant_number"] || "")
   const [isSaving, setIsSaving] = useState(false)
 
+  // Tracking & SEO
+  const [ga4Id, setGa4Id] = useState(initialSettings["ga4_id"] || "")
+  const [metaPixelId, setMetaPixelId] = useState(initialSettings["meta_pixel_id"] || "")
+  const [clarityId, setClarityId] = useState(initialSettings["clarity_id"] || "")
+  const [metaTitle, setMetaTitle] = useState(initialSettings["meta_title"] || "")
+  const [metaDescription, setMetaDescription] = useState(initialSettings["meta_description"] || "")
+  const [isTrackingSaving, setIsTrackingSaving] = useState(false)
+
   const [inviteEmail, setInviteEmail] = useState("")
   const [inviteRole, setInviteRole] = useState("STAFF")
   const [isInviteOpen, setIsInviteOpen] = useState(false)
@@ -64,6 +72,35 @@ export function SettingsClient({
       toast.error("Error saving settings")
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleSaveTracking = async () => {
+    setIsTrackingSaving(true)
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          settings: {
+            ga4_id: ga4Id,
+            meta_pixel_id: metaPixelId,
+            clarity_id: clarityId,
+            meta_title: metaTitle,
+            meta_description: metaDescription,
+          },
+        }),
+      })
+      if (res.ok) {
+        toast.success("Tracking settings saved")
+        router.refresh()
+      } else {
+        toast.error("Failed to save tracking settings")
+      }
+    } catch {
+      toast.error("Error saving tracking settings")
+    } finally {
+      setIsTrackingSaving(false)
     }
   }
 
@@ -154,6 +191,63 @@ export function SettingsClient({
           </div>
           <Button onClick={handleSaveSettings} disabled={isSaving}>
             {isSaving ? "Saving..." : "Save Changes"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Tracking & SEO</CardTitle>
+          <CardDescription>Configure analytics and default SEO metadata. Changes take effect on the next page load.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6 max-w-2xl">
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Analytics IDs</h3>
+            <div className="space-y-2">
+              <label className="text-sm font-medium flex items-center gap-2">
+                Google Analytics 4 (GA4)
+                <span className="text-xs text-muted-foreground font-normal">e.g. G-XXXXXXXXXX</span>
+              </label>
+              <Input value={ga4Id} onChange={(e) => setGa4Id(e.target.value)} placeholder="G-XXXXXXXXXX" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium flex items-center gap-2">
+                Meta Pixel ID
+                <span className="text-xs text-muted-foreground font-normal">e.g. 123456789012345</span>
+              </label>
+              <Input value={metaPixelId} onChange={(e) => setMetaPixelId(e.target.value)} placeholder="123456789012345" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium flex items-center gap-2">
+                Microsoft Clarity ID
+                <span className="text-xs text-muted-foreground font-normal">e.g. abc123xyz</span>
+              </label>
+              <Input value={clarityId} onChange={(e) => setClarityId(e.target.value)} placeholder="abc123xyz" />
+            </div>
+          </div>
+
+          <div className="space-y-4 border-t pt-4">
+            <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Default SEO</h3>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Site Title</label>
+              <Input value={metaTitle} onChange={(e) => setMetaTitle(e.target.value)} placeholder="DRIP | Wear Your Story" />
+              <p className="text-xs text-muted-foreground">Used as the default page title and OG title.</p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Meta Description</label>
+              <textarea
+                value={metaDescription}
+                onChange={(e) => setMetaDescription(e.target.value)}
+                rows={3}
+                placeholder="Modern Bangladeshi clothing brand. Shop premium fashion..."
+                className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+              />
+              <p className="text-xs text-muted-foreground">{metaDescription.length}/160 characters recommended.</p>
+            </div>
+          </div>
+
+          <Button onClick={handleSaveTracking} disabled={isTrackingSaving}>
+            {isTrackingSaving ? "Saving..." : "Save Tracking & SEO"}
           </Button>
         </CardContent>
       </Card>

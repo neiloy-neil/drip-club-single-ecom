@@ -4,6 +4,11 @@ import { initializePayment, completePayment } from "@/lib/nagad"
 
 export async function POST(req: Request) {
   try {
+    const clientIp =
+      req.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
+      req.headers.get("x-real-ip") ||
+      "127.0.0.1"
+
     const { orderId } = await req.json()
 
     if (!orderId) {
@@ -25,10 +30,10 @@ export async function POST(req: Request) {
     const amount = Number(order.total)
     
     // Call Nagad Initialize API
-    const initData = await initializePayment(orderId, amount)
+    const initData = await initializePayment(orderId, amount, clientIp)
 
     // Call Nagad Complete API to get the redirect URL
-    const nagadURL = await completePayment(initData.paymentReferenceId, orderId, amount, initData.challenge)
+    const nagadURL = await completePayment(initData.paymentReferenceId, orderId, amount, initData.challenge, clientIp)
 
     // Save payment ID to Payment record
     await prisma.payment.upsert({

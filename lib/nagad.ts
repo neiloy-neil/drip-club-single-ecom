@@ -56,7 +56,7 @@ function signWithPrivateKey(data: string): string {
   }
 }
 
-export async function initializePayment(orderId: string, amount: number) {
+export async function initializePayment(orderId: string, amount: number, clientIp = "127.0.0.1") {
   const dateTime = getFormattedDateTime();
   const challenge = generateRandomString();
 
@@ -83,7 +83,7 @@ export async function initializePayment(orderId: string, amount: number) {
     headers: {
       'Content-Type': 'application/json',
       'X-KM-Api-Version': 'v-0.2.0',
-      'X-KM-IP-V4': '127.0.0.1', // Should ideally be client IP
+      'X-KM-IP-V4': clientIp,
       'X-KM-Client-Type': 'PC_WEB'
     },
     body: JSON.stringify(payload)
@@ -104,7 +104,7 @@ export async function initializePayment(orderId: string, amount: number) {
   };
 }
 
-export async function completePayment(paymentReferenceId: string, orderId: string, amount: number, challenge: string) {
+export async function completePayment(paymentReferenceId: string, orderId: string, amount: number, challenge: string, clientIp = "127.0.0.1") {
   const sensitiveDataObj = {
     merchantId,
     orderId,
@@ -128,7 +128,7 @@ export async function completePayment(paymentReferenceId: string, orderId: strin
     headers: {
       'Content-Type': 'application/json',
       'X-KM-Api-Version': 'v-0.2.0',
-      'X-KM-IP-V4': '127.0.0.1',
+      'X-KM-IP-V4': clientIp,
       'X-KM-Client-Type': 'PC_WEB'
     },
     body: JSON.stringify(payload)

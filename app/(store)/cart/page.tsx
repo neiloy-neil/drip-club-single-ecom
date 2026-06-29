@@ -5,16 +5,46 @@ import { Trash2, Minus, Plus, ShoppingBag, ShieldCheck, ArrowRight } from "lucid
 import Link from "next/link"
 import { useState } from "react"
 import { Switch } from "@/components/ui/switch"
+import { toast } from "sonner"
 
 export default function CartPage() {
   const { items, removeItem, updateQuantity } = useCartStore()
   const [coupon, setCoupon] = useState("")
+  const [couponDiscount, setCouponDiscount] = useState(0)
+  const [appliedCode, setAppliedCode] = useState("")
+  const [couponLoading, setCouponLoading] = useState(false)
   const [useLoyalty, setUseLoyalty] = useState(false)
 
   const subtotal = items.reduce((acc, item) => acc + (item.price * item.quantity), 0)
   const loyaltyPoints = 0 // Fetched at checkout when user is authenticated
   const loyaltyValue = useLoyalty ? Math.min(loyaltyPoints * 0.1, subtotal * 0.2) : 0
-  const finalTotal = subtotal - loyaltyValue
+  const finalTotal = subtotal - loyaltyValue - couponDiscount
+
+  async function handleApplyCoupon() {
+    if (!coupon.trim()) return
+    setCouponLoading(true)
+    try {
+      const res = await fetch("/api/store/coupon", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: coupon.trim(), subtotal }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || "Invalid coupon")
+        setCouponDiscount(0)
+        setAppliedCode("")
+      } else {
+        setCouponDiscount(data.discount)
+        setAppliedCode(data.code)
+        toast.success(`Coupon applied! You save ৳${data.discount.toLocaleString()}`)
+      }
+    } catch {
+      toast.error("Failed to apply coupon")
+    } finally {
+      setCouponLoading(false)
+    }
+  }
 
   if (items.length === 0) {
     return (
@@ -98,15 +128,19 @@ export default function CartPage() {
             
             <div className="space-y-4 mb-6">
               <div className="flex items-center gap-2 border border-drip-border rounded-lg bg-drip-muted/30 p-1">
-                <input 
-                  type="text" 
-                  placeholder="Promo Code" 
+                <input
+                  type="text"
+                  placeholder="Promo Code"
                   value={coupon}
-                  onChange={(e) => setCoupon(e.target.value)}
+                  onChange={(e) => { setCoupon(e.target.value); if (appliedCode) { setCouponDiscount(0); setAppliedCode("") } }}
                   className="flex-1 bg-transparent px-3 text-sm focus:outline-none placeholder:text-drip-text-muted"
                 />
-                <button className="bg-drip-black text-white text-xs font-bold uppercase tracking-widest px-4 py-3 rounded-md hover:bg-drip-gold transition-colors">
-                  Apply
+                <button
+                  onClick={handleApplyCoupon}
+                  disabled={couponLoading || !coupon.trim()}
+                  className="bg-drip-black text-white text-xs font-bold uppercase tracking-widest px-4 py-3 rounded-md hover:bg-drip-gold transition-colors disabled:opacity-50"
+                >
+                  {couponLoading ? "..." : appliedCode ? "Applied" : "Apply"}
                 </button>
               </div>
               
@@ -124,6 +158,12 @@ export default function CartPage() {
                 <span className="text-drip-text-muted">Subtotal</span>
                 <span className="font-mono">৳{subtotal.toLocaleString()}</span>
               </div>
+              {couponDiscount > 0 && (
+                <div className="flex justify-between text-drip-success font-medium">
+                  <span>Coupon ({appliedCode})</span>
+                  <span className="font-mono">-৳{couponDiscount.toLocaleString()}</span>
+                </div>
+              )}
               {useLoyalty && (
                 <div className="flex justify-between text-drip-success font-medium">
                   <span>Loyalty Discount</span>

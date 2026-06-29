@@ -6,6 +6,36 @@ import VariantSelector from "@/components/store/VariantSelector"
 import ProductCard from "@/components/store/ProductCard"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Truck, RefreshCw, ShieldCheck } from "lucide-react"
+import type { Metadata } from "next"
+
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://drip.com.bd"
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params
+  const product = await prisma.product.findUnique({
+    where: { slug, isActive: true },
+    include: { images: { take: 1, orderBy: { sortOrder: "asc" } }, category: true },
+  }).catch(() => null)
+
+  if (!product) return { title: "Product Not Found" }
+
+  const image = product.images[0]?.url
+  const price = Number(product.price).toLocaleString()
+  const title = `${product.name} — ৳${price}`
+  const description = product.description || `Shop ${product.name} at DRIP. Premium quality fashion from Bangladesh.`
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      url: `${SITE_URL}/shop/${slug}`,
+      images: image ? [{ url: image, width: 800, height: 1000, alt: product.name }] : [],
+    },
+    twitter: { card: "summary_large_image", title, description, images: image ? [image] : [] },
+  }
+}
 
 export default async function ProductDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -34,9 +64,30 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     include: { category: true, images: true, variants: true }
   }).catch(() => [])
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: product.name,
+    description: product.description || "",
+    image: product.images.map((i) => i.url),
+    sku: product.variants[0]?.sku || product.id,
+    brand: { "@type": "Brand", name: "DRIP" },
+    offers: {
+      "@type": "AggregateOffer",
+      priceCurrency: "BDT",
+      lowPrice: Number(product.price),
+      highPrice: Number(product.comparePrice || product.price),
+      availability: product.variants.some((v) => v.stock > 0)
+        ? "https://schema.org/InStock"
+        : "https://schema.org/OutOfStock",
+      url: `${SITE_URL}/shop/${product.slug}`,
+    },
+  }
+
   return (
     <div className="bg-drip-bg animate-in fade-in duration-500">
-      
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+
       {/* Breadcrumb - Minimal */}
       <div className="container mx-auto px-4 py-6 text-[10px] uppercase tracking-widest text-drip-text-muted">
         <a href="/" className="hover:text-drip-gold transition-colors">Home</a>
