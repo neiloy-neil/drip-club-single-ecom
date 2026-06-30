@@ -5,6 +5,11 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Menu, Package2, CircleUser } from "lucide-react"
 
+// Admin pages are auth-gated and per-request — never statically prerender
+// them. Without this, Next.js tries to build them at build time with no
+// session, hitting the DB and exhausting the Supabase pooler's connection limit.
+export const dynamic = "force-dynamic"
+
 export default async function AdminLayout({
   children,
 }: {
