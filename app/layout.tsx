@@ -15,34 +15,36 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://drip.com.bd"
 export async function generateMetadata(): Promise<Metadata> {
   let siteTitle = "DRIP | Wear Your Story"
   let siteDescription = "Modern Bangladeshi clothing brand. Shop premium t-shirts, shirts, dresses, kurtis and accessories. Free delivery above ৳1000."
+  let storeName = "DRIP"
 
   try {
     const settings = await prisma.setting.findMany({
-      where: { key: { in: ["meta_title", "meta_description"] } },
+      where: { key: { in: ["meta_title", "meta_description", "store_name"] } },
     })
     const map = Object.fromEntries(settings.map((s) => [s.key, s.value]))
     if (map["meta_title"]) siteTitle = map["meta_title"]
     if (map["meta_description"]) siteDescription = map["meta_description"]
+    if (map["store_name"]) storeName = map["store_name"]
   } catch { /* DB unavailable — use defaults */ }
 
   return {
     metadataBase: new URL(SITE_URL),
     title: {
       default: siteTitle,
-      template: "%s | DRIP",
+      template: `%s | ${storeName}`,
     },
     description: siteDescription,
-    keywords: ["Bangladesh fashion", "clothing store", "online shopping BD", "DRIP fashion", "t-shirt", "kurti", "dress", "shirt Bangladesh"],
-    authors: [{ name: "DRIP" }],
-    creator: "DRIP",
+    keywords: ["Bangladesh fashion", "clothing store", "online shopping BD", `${storeName} fashion`, "t-shirt", "kurti", "dress", "shirt Bangladesh"],
+    authors: [{ name: storeName }],
+    creator: storeName,
     openGraph: {
       type: "website",
       locale: "en_BD",
       url: SITE_URL,
-      siteName: "DRIP",
+      siteName: storeName,
       title: siteTitle,
       description: siteDescription,
-      images: [{ url: "/og-image.jpg", width: 1200, height: 630, alt: "DRIP Fashion" }],
+      images: [{ url: "/og-image.jpg", width: 1200, height: 630, alt: `${storeName} Fashion` }],
     },
     twitter: {
       card: "summary_large_image",

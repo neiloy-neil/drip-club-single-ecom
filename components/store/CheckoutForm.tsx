@@ -5,12 +5,26 @@ import { useCartStore } from "@/store/useCartStore"
 import { useRouter } from "next/navigation"
 import { MapPin, CreditCard, ClipboardCheck, ChevronRight, Check } from "lucide-react"
 
-export default function CheckoutForm() {
+export default function CheckoutForm({
+  freeShippingThreshold = 1000,
+  shippingChargeAmount = 60,
+  enabledPaymentMethods = ["COD", "BKASH", "NAGAD"],
+  taxEnabled = false,
+  taxRate = 0,
+  taxLabel = "VAT",
+}: {
+  freeShippingThreshold?: number
+  shippingChargeAmount?: number
+  enabledPaymentMethods?: string[]
+  taxEnabled?: boolean
+  taxRate?: number
+  taxLabel?: string
+}) {
   const { items, clearCart } = useCartStore()
   const router = useRouter()
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
-  
+
   // Step 1 data
   const [address, setAddress] = useState({
     name: "",
@@ -22,12 +36,15 @@ export default function CheckoutForm() {
   })
 
   // Step 2 data
-  const [paymentMethod, setPaymentMethod] = useState("COD")
+  const [paymentMethod, setPaymentMethod] = useState(
+    enabledPaymentMethods.includes("COD") ? "COD" : enabledPaymentMethods[0] || "COD"
+  )
   const [depositInfo, setDepositInfo] = useState<{ required: boolean; amount: number } | null>(null)
 
   const subtotal = items.reduce((acc, item) => acc + (item.price * item.quantity), 0)
-  const shippingCharge = subtotal >= 1000 ? 0 : 100
-  const total = subtotal + shippingCharge
+  const shippingCharge = subtotal >= freeShippingThreshold ? 0 : shippingChargeAmount
+  const taxAmount = taxEnabled ? Math.round((subtotal * taxRate) / 100) : 0
+  const total = subtotal + shippingCharge + taxAmount
 
   const handleSubmitStep1 = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -225,34 +242,46 @@ export default function CheckoutForm() {
           {step === 2 && (
             <div className="p-6">
               <form onSubmit={handleSubmitStep2} className="space-y-4">
-                <label className={`flex items-center p-4 border rounded-xl cursor-pointer transition-all duration-300 ${paymentMethod === 'COD' ? 'border-drip-black bg-drip-muted/20 shadow-sm' : 'border-drip-border hover:border-drip-black/30'}`}>
-                  <input type="radio" name="payment" value="COD" checked={paymentMethod === 'COD'} onChange={() => setPaymentMethod('COD')} className="w-4 h-4 accent-drip-black" />
-                  <div className="ml-4">
-                    <span className="font-bold block text-sm">Cash on Delivery</span>
-                    <span className="text-xs text-drip-text-muted">Pay in cash when your order arrives</span>
-                    {paymentMethod === 'COD' && depositInfo?.required && (
-                      <p className="text-xs text-drip-gold font-medium mt-1.5">
-                        A ৳{depositInfo.amount} advance payment via bKash is required to confirm this order.
-                        The remaining ৳{(total - depositInfo.amount).toLocaleString()} is paid on delivery.
-                      </p>
-                    )}
-                  </div>
-                </label>
+                {enabledPaymentMethods.includes("COD") && (
+                  <label className={`flex items-center p-4 border rounded-xl cursor-pointer transition-all duration-300 ${paymentMethod === 'COD' ? 'border-drip-black bg-drip-muted/20 shadow-sm' : 'border-drip-border hover:border-drip-black/30'}`}>
+                    <input type="radio" name="payment" value="COD" checked={paymentMethod === 'COD'} onChange={() => setPaymentMethod('COD')} className="w-4 h-4 accent-drip-black" />
+                    <div className="ml-4">
+                      <span className="font-bold block text-sm">Cash on Delivery</span>
+                      <span className="text-xs text-drip-text-muted">Pay in cash when your order arrives</span>
+                      {paymentMethod === 'COD' && depositInfo?.required && (
+                        <p className="text-xs text-drip-gold font-medium mt-1.5">
+                          A ৳{depositInfo.amount} advance payment via bKash is required to confirm this order.
+                          The remaining ৳{(total - depositInfo.amount).toLocaleString()} is paid on delivery.
+                        </p>
+                      )}
+                    </div>
+                  </label>
+                )}
 
-                <label className={`flex items-center p-4 border rounded-xl cursor-pointer transition-all duration-300 ${paymentMethod === 'BKASH' ? 'border-drip-black bg-drip-muted/20 shadow-sm' : 'border-drip-border hover:border-drip-black/30'}`}>
-                  <input type="radio" name="payment" value="BKASH" checked={paymentMethod === 'BKASH'} onChange={() => setPaymentMethod('BKASH')} className="w-4 h-4 accent-drip-black" />
-                  <div className="ml-4 flex items-center gap-2">
-                    <span className="font-bold block text-sm">bKash</span>
-                    <span className="text-[10px] bg-pink-100 text-pink-700 px-2 py-0.5 rounded font-bold uppercase tracking-widest">Fast</span>
-                  </div>
-                </label>
-                
-                <label className={`flex items-center p-4 border rounded-xl cursor-pointer transition-all duration-300 ${paymentMethod === 'NAGAD' ? 'border-drip-black bg-drip-muted/20 shadow-sm' : 'border-drip-border hover:border-drip-black/30'}`}>
-                  <input type="radio" name="payment" value="NAGAD" checked={paymentMethod === 'NAGAD'} onChange={() => setPaymentMethod('NAGAD')} className="w-4 h-4 accent-drip-black" />
-                  <div className="ml-4">
-                    <span className="font-bold block text-sm">Nagad</span>
-                  </div>
-                </label>
+                {enabledPaymentMethods.includes("BKASH") && (
+                  <label className={`flex items-center p-4 border rounded-xl cursor-pointer transition-all duration-300 ${paymentMethod === 'BKASH' ? 'border-drip-black bg-drip-muted/20 shadow-sm' : 'border-drip-border hover:border-drip-black/30'}`}>
+                    <input type="radio" name="payment" value="BKASH" checked={paymentMethod === 'BKASH'} onChange={() => setPaymentMethod('BKASH')} className="w-4 h-4 accent-drip-black" />
+                    <div className="ml-4 flex items-center gap-2">
+                      <span className="font-bold block text-sm">bKash</span>
+                      <span className="text-[10px] bg-pink-100 text-pink-700 px-2 py-0.5 rounded font-bold uppercase tracking-widest">Fast</span>
+                    </div>
+                  </label>
+                )}
+
+                {enabledPaymentMethods.includes("NAGAD") && (
+                  <label className={`flex items-center p-4 border rounded-xl cursor-pointer transition-all duration-300 ${paymentMethod === 'NAGAD' ? 'border-drip-black bg-drip-muted/20 shadow-sm' : 'border-drip-border hover:border-drip-black/30'}`}>
+                    <input type="radio" name="payment" value="NAGAD" checked={paymentMethod === 'NAGAD'} onChange={() => setPaymentMethod('NAGAD')} className="w-4 h-4 accent-drip-black" />
+                    <div className="ml-4">
+                      <span className="font-bold block text-sm">Nagad</span>
+                    </div>
+                  </label>
+                )}
+
+                {enabledPaymentMethods.length === 0 && (
+                  <p className="text-sm text-drip-text-muted p-4 border border-drip-border rounded-xl">
+                    No payment methods are currently enabled. Please contact support.
+                  </p>
+                )}
 
                 <div className="pt-4 flex justify-end">
                   <button type="submit" className="px-8 py-4 bg-drip-black text-white font-bold uppercase tracking-widest flex items-center gap-2 hover:bg-drip-gold transition-colors rounded-full text-xs">
@@ -326,6 +355,12 @@ export default function CheckoutForm() {
               <span>Shipping</span>
               <span className="font-mono">{shippingCharge === 0 ? "Free" : `৳${shippingCharge}`}</span>
             </div>
+            {taxEnabled && taxAmount > 0 && (
+              <div className="flex justify-between text-drip-text-muted">
+                <span>{taxLabel} ({taxRate}%)</span>
+                <span className="font-mono">৳{taxAmount.toLocaleString()}</span>
+              </div>
+            )}
             <div className="flex justify-between border-t border-drip-border pt-4 font-bold text-lg items-center">
               <span>Total</span>
               <span className="font-mono text-2xl">৳{total.toLocaleString()}</span>

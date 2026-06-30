@@ -474,6 +474,20 @@ model Banner {
   @@map("banners")
 }
 
+// Admin-editable content pages (FAQ, Returns, Size Guide, Contact, etc.)
+// so these don't need a code change per store.
+model Page {
+  id          String   @id @default(cuid())
+  slug        String   @unique // e.g. "faq", "returns", "size-guide", "contact"
+  title       String
+  content     String // simple HTML, rendered as-is
+  isPublished Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("pages")
+}
+
 model Setting {
   id    String @id @default(cuid())
   key   String @unique

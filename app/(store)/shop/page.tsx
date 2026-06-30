@@ -8,14 +8,15 @@ import { redirect } from "next/navigation"
 export default async function ShopPage({
   searchParams
 }: {
-  searchParams: Promise<{ categoryId?: string, size?: string, color?: string, sort?: string, take?: string }>
+  searchParams: Promise<{ categoryId?: string, size?: string, color?: string, sort?: string, take?: string, sale?: string }>
 }) {
   const params = await searchParams;
   const categoryId = params.categoryId
   const size = params.size
   const color = params.color
   const sort = params.sort || "newest"
-  
+  const saleOnly = params.sale === "true"
+
   const take = parseInt(params.take || "12")
 
   let orderBy: any = { createdAt: 'desc' }
@@ -24,7 +25,8 @@ export default async function ShopPage({
 
   const where: any = { isActive: true }
   if (categoryId) where.categoryId = categoryId
-  
+  if (saleOnly) where.comparePrice = { not: null }
+
   if (size || color) {
     where.variants = { some: {} }
     if (size) where.variants.some.size = size

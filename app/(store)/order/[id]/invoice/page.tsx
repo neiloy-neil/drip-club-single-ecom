@@ -5,12 +5,19 @@ import InvoicePrintButton from "@/components/store/InvoicePrintButton"
 export default async function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
 
-  const order = await prisma.order.findUnique({
-    where: { id },
-    include: { items: true, payment: true },
-  })
+  const [order, settings] = await Promise.all([
+    prisma.order.findUnique({
+      where: { id },
+      include: { items: true, payment: true },
+    }),
+    prisma.setting.findMany({ where: { key: { in: ["store_name", "support_email"] } } }),
+  ])
 
   if (!order) notFound()
+
+  const settingsMap = Object.fromEntries(settings.map((s) => [s.key, s.value]))
+  const storeName = settingsMap.store_name || "DRIP"
+  const supportEmail = settingsMap.support_email || "support@drip.com.bd"
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-12 print:p-0">
@@ -22,8 +29,8 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
       <div className="border border-drip-border rounded-2xl p-8 print:border-0 print:rounded-none print:p-0">
         <div className="flex items-start justify-between mb-8 pb-8 border-b border-drip-border">
           <div>
-            <h2 className="text-2xl font-heading font-bold">DRIP</h2>
-            <p className="text-xs text-drip-text-muted mt-1">support@drip.com.bd</p>
+            <h2 className="text-2xl font-heading font-bold">{storeName}</h2>
+            <p className="text-xs text-drip-text-muted mt-1">{supportEmail}</p>
           </div>
           <div className="text-right">
             <p className="text-xs uppercase tracking-widest text-drip-text-muted font-bold">Invoice</p>

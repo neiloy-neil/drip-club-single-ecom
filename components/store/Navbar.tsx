@@ -8,11 +8,24 @@ import { useWishlistStore } from "@/store/useWishlistStore"
 import CartDrawer from "@/components/store/CartDrawer"
 import SearchModal from "@/components/store/SearchModal"
 
-export default function Navbar({ freeShippingThreshold = 1000 }: { freeShippingThreshold?: number }) {
+type NavCategory = { id: string; name: string; slug: string }
+
+export default function Navbar({
+  freeShippingThreshold = 1000,
+  storeName = "DRIP",
+  storeTagline = "Wear Your Story",
+  categories = [],
+}: {
+  freeShippingThreshold?: number
+  storeName?: string
+  storeTagline?: string
+  categories?: NavCategory[]
+}) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const itemCount = useCartStore((s) => s.items.reduce((acc, i) => acc + i.quantity, 0))
   const wishlistCount = useWishlistStore((s) => s.items.length)
+  const navCategories = categories.slice(0, 4)
 
   return (
     <>
@@ -33,8 +46,8 @@ export default function Navbar({ freeShippingThreshold = 1000 }: { freeShippingT
               <Menu className="w-6 h-6" />
             </button>
             <Link href="/" className="flex flex-col">
-              <span className="font-heading font-bold text-2xl md:text-3xl tracking-tight leading-none">DRIP</span>
-              <span className="text-[10px] uppercase tracking-widest text-drip-text-muted leading-tight mt-0.5 hidden md:block">Wear Your Story</span>
+              <span className="font-heading font-bold text-2xl md:text-3xl tracking-tight leading-none">{storeName}</span>
+              <span className="text-[10px] uppercase tracking-widest text-drip-text-muted leading-tight mt-0.5 hidden md:block">{storeTagline}</span>
             </Link>
           </div>
 
@@ -42,8 +55,17 @@ export default function Navbar({ freeShippingThreshold = 1000 }: { freeShippingT
           <nav className="hidden md:flex items-center justify-center gap-8 w-1/3">
             <Link href="/" className="text-sm font-medium hover:text-drip-gold transition-colors">Home</Link>
             <Link href="/shop" className="text-sm font-medium hover:text-drip-gold transition-colors">Shop</Link>
+            {navCategories.map((cat) => (
+              <Link
+                key={cat.id}
+                href={`/shop?categoryId=${cat.id}`}
+                className="text-sm font-medium hover:text-drip-gold transition-colors"
+              >
+                {cat.name}
+              </Link>
+            ))}
             <Link href="/shop?sort=newest" className="text-sm font-medium hover:text-drip-gold transition-colors">New Arrivals</Link>
-            <Link href="/shop?category=sale" className="text-sm font-medium text-drip-error hover:text-drip-error/80 transition-colors">Sale</Link>
+            <Link href="/shop?sale=true" className="text-sm font-medium text-drip-error hover:text-drip-error/80 transition-colors">Sale</Link>
           </nav>
 
           {/* Icons */}
@@ -86,7 +108,7 @@ export default function Navbar({ freeShippingThreshold = 1000 }: { freeShippingT
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <span className="font-heading font-bold text-2xl">DRIP</span>
+              <span className="font-heading font-bold text-2xl">{storeName}</span>
               <button onClick={() => setMobileOpen(false)}>
                 <X className="w-6 h-6" />
               </button>
@@ -94,8 +116,18 @@ export default function Navbar({ freeShippingThreshold = 1000 }: { freeShippingT
             <nav className="flex flex-col gap-6 text-lg font-medium">
               <Link href="/" onClick={() => setMobileOpen(false)} className="hover:text-drip-gold transition-colors">Home</Link>
               <Link href="/shop" onClick={() => setMobileOpen(false)} className="hover:text-drip-gold transition-colors">Shop</Link>
+              {navCategories.map((cat) => (
+                <Link
+                  key={cat.id}
+                  href={`/shop?categoryId=${cat.id}`}
+                  onClick={() => setMobileOpen(false)}
+                  className="hover:text-drip-gold transition-colors"
+                >
+                  {cat.name}
+                </Link>
+              ))}
               <Link href="/shop?sort=newest" onClick={() => setMobileOpen(false)} className="hover:text-drip-gold transition-colors">New Arrivals</Link>
-              <Link href="/shop?category=sale" onClick={() => setMobileOpen(false)} className="text-drip-error">Sale</Link>
+              <Link href="/shop?sale=true" onClick={() => setMobileOpen(false)} className="text-drip-error">Sale</Link>
               <Link href="/wishlist" onClick={() => setMobileOpen(false)} className="hover:text-drip-gold transition-colors flex items-center gap-2">
                 Wishlist {wishlistCount > 0 && <span className="bg-drip-error text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{wishlistCount}</span>}
               </Link>

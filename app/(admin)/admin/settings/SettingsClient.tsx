@@ -31,10 +31,33 @@ export function SettingsClient({
   const router = useRouter()
 
   const [storeName, setStoreName] = useState(initialSettings["store_name"] || "")
+  const [storeTagline, setStoreTagline] = useState(initialSettings["store_tagline"] || "")
+  const [storeDescription, setStoreDescription] = useState(initialSettings["store_description"] || "")
+  const [supportEmail, setSupportEmail] = useState(initialSettings["support_email"] || "")
+  const [supportPhone, setSupportPhone] = useState(initialSettings["support_phone"] || "")
+  const [socialFacebook, setSocialFacebook] = useState(initialSettings["social_facebook"] || "")
+  const [socialInstagram, setSocialInstagram] = useState(initialSettings["social_instagram"] || "")
+  const [socialTiktok, setSocialTiktok] = useState(initialSettings["social_tiktok"] || "")
   const [freeShippingThreshold, setFreeShippingThreshold] = useState(initialSettings["free_shipping_above"] || "")
+  const [shippingChargeAmount, setShippingChargeAmount] = useState(initialSettings["shipping_charge"] || "60")
+  const [enabledCOD, setEnabledCOD] = useState(
+    !initialSettings["enabled_payment_methods"] || initialSettings["enabled_payment_methods"].includes("COD")
+  )
+  const [enabledBkash, setEnabledBkash] = useState(
+    !initialSettings["enabled_payment_methods"] || initialSettings["enabled_payment_methods"].includes("BKASH")
+  )
+  const [enabledNagad, setEnabledNagad] = useState(
+    !initialSettings["enabled_payment_methods"] || initialSettings["enabled_payment_methods"].includes("NAGAD")
+  )
   const [bkashNumber, setBkashNumber] = useState(initialSettings["bkash_merchant_number"] || "")
   const [nagadNumber, setNagadNumber] = useState(initialSettings["nagad_merchant_number"] || "")
   const [isSaving, setIsSaving] = useState(false)
+
+  // Tax / VAT
+  const [taxEnabled, setTaxEnabled] = useState(initialSettings["tax_enabled"] === "true")
+  const [taxRate, setTaxRate] = useState(initialSettings["tax_rate"] || "")
+  const [taxLabel, setTaxLabel] = useState(initialSettings["tax_label"] || "VAT")
+  const [isTaxSaving, setIsTaxSaving] = useState(false)
 
   // COD Deposit (RTO/fraud prevention)
   const [codDepositEnabled, setCodDepositEnabled] = useState(initialSettings["cod_deposit_enabled"] === "true")
@@ -62,7 +85,20 @@ export function SettingsClient({
         body: JSON.stringify({
           settings: {
             store_name: storeName,
+            store_tagline: storeTagline,
+            store_description: storeDescription,
+            support_email: supportEmail,
+            support_phone: supportPhone,
+            social_facebook: socialFacebook,
+            social_instagram: socialInstagram,
+            social_tiktok: socialTiktok,
             free_shipping_above: freeShippingThreshold,
+            shipping_charge: shippingChargeAmount,
+            enabled_payment_methods: [
+              enabledCOD && "COD",
+              enabledBkash && "BKASH",
+              enabledNagad && "NAGAD",
+            ].filter(Boolean).join(","),
             bkash_merchant_number: bkashNumber,
             nagad_merchant_number: nagadNumber,
           },
@@ -104,6 +140,33 @@ export function SettingsClient({
       toast.error("Error saving deposit settings")
     } finally {
       setIsDepositSaving(false)
+    }
+  }
+
+  const handleSaveTax = async () => {
+    setIsTaxSaving(true)
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          settings: {
+            tax_enabled: taxEnabled,
+            tax_rate: taxRate,
+            tax_label: taxLabel,
+          },
+        }),
+      })
+      if (res.ok) {
+        toast.success("Tax settings saved")
+        router.refresh()
+      } else {
+        toast.error("Failed to save tax settings")
+      }
+    } catch {
+      toast.error("Error saving tax settings")
+    } finally {
+      setIsTaxSaving(false)
     }
   }
 
@@ -204,12 +267,50 @@ export function SettingsClient({
             <Input value={storeName} onChange={(e) => setStoreName(e.target.value)} />
           </div>
           <div className="space-y-2">
+            <label className="text-sm font-medium">Tagline</label>
+            <Input value={storeTagline} onChange={(e) => setStoreTagline(e.target.value)} placeholder="Wear Your Story" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Store Description</label>
+            <textarea
+              value={storeDescription}
+              onChange={(e) => setStoreDescription(e.target.value)}
+              rows={2}
+              className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+              placeholder="Shown in the site footer"
+            />
+          </div>
+          <div className="space-y-2">
             <label className="text-sm font-medium">Currency</label>
             <Input value="BDT (৳)" disabled />
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Free Shipping Threshold (৳)</label>
-            <Input type="number" min="0" value={freeShippingThreshold} onChange={(e) => setFreeShippingThreshold(e.target.value)} />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Free Shipping Threshold (৳)</label>
+              <Input type="number" min="0" value={freeShippingThreshold} onChange={(e) => setFreeShippingThreshold(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Shipping Charge (৳)</label>
+              <Input type="number" min="0" value={shippingChargeAmount} onChange={(e) => setShippingChargeAmount(e.target.value)} />
+              <p className="text-xs text-muted-foreground">Charged when order is below threshold</p>
+            </div>
+          </div>
+          <div className="space-y-3 border-t pt-4">
+            <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Payment Methods at Checkout</h3>
+            <div className="flex flex-wrap gap-6">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input type="checkbox" checked={enabledCOD} onChange={(e) => setEnabledCOD(e.target.checked)} />
+                Cash on Delivery (COD)
+              </label>
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input type="checkbox" checked={enabledBkash} onChange={(e) => setEnabledBkash(e.target.checked)} />
+                bKash
+              </label>
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input type="checkbox" checked={enabledNagad} onChange={(e) => setEnabledNagad(e.target.checked)} />
+                Nagad
+              </label>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -219,6 +320,33 @@ export function SettingsClient({
             <div className="space-y-2">
               <label className="text-sm font-medium">Nagad Merchant Number</label>
               <Input value={nagadNumber} onChange={(e) => setNagadNumber(e.target.value)} placeholder="01XXXXXXXXX" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Support Email</label>
+              <Input type="email" value={supportEmail} onChange={(e) => setSupportEmail(e.target.value)} placeholder="support@yourstore.com" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Support Phone</label>
+              <Input value={supportPhone} onChange={(e) => setSupportPhone(e.target.value)} placeholder="+880 1XXXXXXXXX" />
+            </div>
+          </div>
+          <div className="space-y-4 border-t pt-4">
+            <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Social Links</h3>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Facebook</label>
+                <Input value={socialFacebook} onChange={(e) => setSocialFacebook(e.target.value)} placeholder="https://facebook.com/..." />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Instagram</label>
+                <Input value={socialInstagram} onChange={(e) => setSocialInstagram(e.target.value)} placeholder="https://instagram.com/..." />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">TikTok</label>
+                <Input value={socialTiktok} onChange={(e) => setSocialTiktok(e.target.value)} placeholder="https://tiktok.com/..." />
+              </div>
             </div>
           </div>
           <Button onClick={handleSaveSettings} disabled={isSaving}>
@@ -259,6 +387,36 @@ export function SettingsClient({
           </div>
           <Button onClick={handleSaveDeposit} disabled={isDepositSaving}>
             {isDepositSaving ? "Saving..." : "Save Deposit Settings"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Tax / VAT</CardTitle>
+          <CardDescription>Configure tax that is calculated and shown at checkout. Leave disabled if your prices already include tax.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 max-w-2xl">
+          <div className="flex items-center justify-between border rounded-lg p-4">
+            <div>
+              <p className="text-sm font-bold">Enable Tax at Checkout</p>
+              <p className="text-xs text-muted-foreground mt-1">Tax is calculated on the subtotal and shown as a separate line item.</p>
+            </div>
+            <Switch checked={taxEnabled} onCheckedChange={setTaxEnabled} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Tax Rate (%)</label>
+              <Input type="number" min="0" max="100" step="0.01" value={taxRate} onChange={(e) => setTaxRate(e.target.value)} placeholder="e.g. 5 for 5%" disabled={!taxEnabled} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Tax Label</label>
+              <Input value={taxLabel} onChange={(e) => setTaxLabel(e.target.value)} placeholder="VAT" disabled={!taxEnabled} />
+              <p className="text-xs text-muted-foreground">Shown next to the tax line at checkout (e.g. "VAT", "GST")</p>
+            </div>
+          </div>
+          <Button onClick={handleSaveTax} disabled={isTaxSaving}>
+            {isTaxSaving ? "Saving..." : "Save Tax Settings"}
           </Button>
         </CardContent>
       </Card>

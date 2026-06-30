@@ -48,11 +48,23 @@ export async function POST(req: Request) {
       }
     }
 
-    // Compute server-side totals from DB prices
+    // Compute server-side totals from DB prices + fetch tax settings
     const serverSubtotal = items.reduce((sum: number, item: any) => {
       const variant = variantMap[item.variantId]
       return sum + Number(variant.product.price) * item.quantity
     }, 0)
+
+    const [taxEnabledSetting, taxRateSetting, shippingChargeSetting] = await Promise.all([
+      prisma.setting.findUnique({ where: { key: "tax_enabled" } }),
+      prisma.setting.findUnique({ where: { key: "tax_rate" } }),
+      prisma.setting.findUnique({ where: { key: "shipping_charge" } }),
+    ])
+
+    const serverShippingCharge = Number(shippingChargeSetting?.value || shippingCharge || 60)
+    const taxEnabled = taxEnabledSetting?.value === "true"
+    const taxRate = Number(taxRateSetting?.value || 0)
+    const serverTaxAmount = taxEnabled ? Math.round((serverSubtotal * taxRate) / 100) : 0
+    const serverTotal = serverSubtotal + serverShippingCharge + serverTaxAmount
 
     const order = await prisma.$transaction(async (tx) => {
       // Re-check stock inside transaction to prevent race conditions
@@ -78,9 +90,9 @@ export async function POST(req: Request) {
           paymentStatus: "UNPAID",
           paymentMethod,
           depositAmount,
-          total,
+          total: serverTotal,
           subtotal: serverSubtotal,
-          shippingCharge: shippingCharge ?? 0,
+          shippingCharge: serverShippingCharge,
           discount: Math.max(0, serverSubtotal - subtotal), // capture any coupon/loyalty discount
           shippingName: address.name,
           shippingPhone: address.phone,

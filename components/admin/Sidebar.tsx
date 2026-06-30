@@ -17,7 +17,8 @@ import {
   PlusCircle,
   Building2,
   ClipboardList,
-  Receipt
+  Receipt,
+  FileText
 } from "lucide-react"
 
 const sidebarLinks = [
@@ -30,6 +31,7 @@ const sidebarLinks = [
   { href: "/admin/suppliers", icon: Building2, label: "Suppliers" },
   { href: "/admin/purchase-orders", icon: ClipboardList, label: "Purchase Orders" },
   { href: "/admin/expenses", icon: Receipt, label: "Expenses" },
+  { href: "/admin/pages", icon: FileText, label: "Pages" },
   { href: "/admin/coupons", icon: Ticket, label: "Coupons" },
   { href: "/admin/loyalty", icon: Gift, label: "Loyalty" },
   { href: "/admin/delivery", icon: Truck, label: "Delivery" },
