@@ -104,12 +104,42 @@ export async function GET(req: Request) {
       Total: Number(o.total),
     }))
 
+    // ─── P&L (lightweight, cash-basis) ───────────────────────────
+    // COGS = cost of inventory actually received from suppliers in range.
+    // Expenses = operating costs logged in range.
+    const [receivedPOs, expenses] = await Promise.all([
+      prisma.purchaseOrder.findMany({
+        where: { status: "RECEIVED", receivedAt: { gte: fromDate } },
+        select: { totalCost: true },
+      }),
+      prisma.expense.findMany({
+        where: { date: { gte: fromDate } },
+        select: { amount: true, category: true },
+      }),
+    ])
+
+    const totalCOGS = receivedPOs.reduce((sum, po) => sum + Number(po.totalCost), 0)
+    const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount), 0)
+    const netProfit = totalRevenue - totalCOGS - totalExpenses
+
+    const expensesByCategory: Record<string, number> = {}
+    expenses.forEach((e) => {
+      expensesByCategory[e.category] = (expensesByCategory[e.category] || 0) + Number(e.amount)
+    })
+
     return NextResponse.json({
       summary: {
         totalOrders,
         totalRevenue,
         averageOrderValue,
         newCustomers,
+      },
+      pnl: {
+        revenue: totalRevenue,
+        cogs: totalCOGS,
+        expenses: totalExpenses,
+        netProfit,
+        expensesByCategory: Object.entries(expensesByCategory).map(([name, value]) => ({ name, value })),
       },
       paymentData,
       statusData,

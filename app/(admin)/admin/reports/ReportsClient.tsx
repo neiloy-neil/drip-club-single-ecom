@@ -138,6 +138,51 @@ export function ReportsClient() {
         </Card>
       </div>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Profit &amp; Loss</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-4">
+            <div>
+              <p className="text-sm text-muted-foreground">Revenue</p>
+              <p className="text-2xl font-bold">৳{data.pnl.revenue.toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Cost of Goods (COGS)</p>
+              <p className="text-2xl font-bold text-red-600">-৳{data.pnl.cogs.toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Expenses</p>
+              <p className="text-2xl font-bold text-red-600">-৳{data.pnl.expenses.toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Net Profit</p>
+              <p className={`text-2xl font-bold ${data.pnl.netProfit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                ৳{data.pnl.netProfit.toLocaleString()}
+              </p>
+            </div>
+          </div>
+          {data.pnl.expensesByCategory.length > 0 && (
+            <div className="mt-6 pt-6 border-t">
+              <p className="text-sm font-medium mb-3">Expenses by Category</p>
+              <div className="flex flex-wrap gap-3">
+                {data.pnl.expensesByCategory.map((c: any) => (
+                  <div key={c.name} className="px-3 py-2 rounded-md bg-muted text-sm">
+                    <span className="text-muted-foreground">{c.name}:</span>{" "}
+                    <span className="font-bold">৳{c.value.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground mt-4">
+            COGS counts inventory marked "Received" from Purchase Orders in this period. This is a simplified
+            cash-basis view, not formal accounting.
+          </p>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="col-span-1">
           <CardHeader>

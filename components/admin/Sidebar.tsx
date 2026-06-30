@@ -14,7 +14,10 @@ import {
   Truck,
   BarChart,
   Settings,
-  PlusCircle
+  PlusCircle,
+  Building2,
+  ClipboardList,
+  Receipt
 } from "lucide-react"
 
 const sidebarLinks = [
@@ -24,6 +27,9 @@ const sidebarLinks = [
   { href: "/admin/orders/new", icon: PlusCircle, label: "New Order" },
   { href: "/admin/customers", icon: Users, label: "Customers" },
   { href: "/admin/inventory", icon: Package, label: "Inventory" },
+  { href: "/admin/suppliers", icon: Building2, label: "Suppliers" },
+  { href: "/admin/purchase-orders", icon: ClipboardList, label: "Purchase Orders" },
+  { href: "/admin/expenses", icon: Receipt, label: "Expenses" },
   { href: "/admin/coupons", icon: Ticket, label: "Coupons" },
   { href: "/admin/loyalty", icon: Gift, label: "Loyalty" },
   { href: "/admin/delivery", icon: Truck, label: "Delivery" },
