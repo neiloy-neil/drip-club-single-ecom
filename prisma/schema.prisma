@@ -73,11 +73,29 @@ model Category {
   sortOrder   Int        @default(0)
   createdAt   DateTime   @default(now())
 
-  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
-  children Category[] @relation("CategoryTree")
-  products Product[]
+  parent          Category?              @relation("CategoryTree", fields: [parentId], references: [id])
+  children        Category[]             @relation("CategoryTree")
+  products        Product[]
+  flashSales      FlashSale[]
+  attributeConfig CategoryAttributeConfig?
 
   @@map("categories")
+}
+
+// Controls the display labels for "size" and "color" variant attributes per category.
+// A gadget category admin sets attr1Label="Storage" attr2Label="Color".
+// No schema change needed per vertical — just re-label the existing columns.
+model CategoryAttributeConfig {
+  id         String   @id @default(cuid())
+  categoryId String   @unique
+  attr1Label String   @default("Size")   // maps to ProductVariant.size
+  attr2Label String   @default("Color")  // maps to ProductVariant.color
+  attr1Hint  String?  // e.g. "S, M, L, XL" or "128GB, 256GB, 512GB"
+  attr2Hint  String?  // e.g. "Red, Blue, Black" or "Midnight Black"
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@map("category_attribute_configs")
 }
 
 // ─────────────────────────────────────────────
@@ -103,6 +121,7 @@ model Product {
   variants   ProductVariant[]
   orderItems OrderItem[]
   reviews    Review[]
+  flashSales FlashSale[]
 
   @@map("products")
 }
@@ -134,6 +153,7 @@ model ProductVariant {
   orderItems         OrderItem[]
   cartItems          CartItem[]
   purchaseOrderItems PurchaseOrderItem[]
+  stockAlerts        StockAlert[]
 
   @@map("product_variants")
 }
@@ -456,6 +476,82 @@ model Review {
 
   @@unique([userId, productId])
   @@map("reviews")
+}
+
+// ─────────────────────────────────────────────
+// AUTOMATIC DISCOUNTS (bulk / tiered)
+// ─────────────────────────────────────────────
+
+// Applied automatically at checkout — no coupon code needed.
+// Rule types:
+//   BUY_X_GET_PERCENT   — buy X+ units of same product → get Y% off
+//   SPEND_X_GET_PERCENT — cart subtotal >= X → get Y% off
+//   BUY_X_ITEMS_GET_PERCENT — any X+ items in cart → get Y% off
+model AutoDiscount {
+  id            String           @id @default(cuid())
+  name          String
+  ruleType      AutoDiscountRule
+  thresholdQty  Int?             // used by BUY_X rules
+  thresholdAmt  Decimal?         // used by SPEND_X rule
+  discountPct   Decimal          // percentage discount to apply
+  isActive      Boolean          @default(true)
+  startsAt      DateTime?
+  endsAt        DateTime?
+  createdAt     DateTime         @default(now())
+
+  @@map("auto_discounts")
+}
+
+enum AutoDiscountRule {
+  BUY_X_GET_PERCENT
+  SPEND_X_GET_PERCENT
+  BUY_X_ITEMS_GET_PERCENT
+}
+
+// ─────────────────────────────────────────────
+// FLASH SALES
+// ─────────────────────────────────────────────
+
+model FlashSale {
+  id            String       @id @default(cuid())
+  name          String       // e.g. "Eid Mega Sale"
+  discountType  DiscountType // PERCENTAGE or FLAT
+  discountValue Decimal
+  scope         FlashSaleScope @default(SITEWIDE)
+  productId     String?      // if scope=PRODUCT
+  categoryId    String?      // if scope=CATEGORY
+  startsAt      DateTime
+  endsAt        DateTime
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+
+  product  Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@map("flash_sales")
+}
+
+enum FlashSaleScope {
+  SITEWIDE
+  CATEGORY
+  PRODUCT
+}
+
+// ─────────────────────────────────────────────
+// BACK-IN-STOCK ALERTS
+// ─────────────────────────────────────────────
+
+model StockAlert {
+  id        String   @id @default(cuid())
+  email     String
+  variantId String
+  notified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([email, variantId])
+  @@map("stock_alerts")
 }
 
 // ─────────────────────────────────────────────

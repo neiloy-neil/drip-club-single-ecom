@@ -18,12 +18,16 @@ import {
   Building2,
   ClipboardList,
   Receipt,
-  FileText
+  FileText,
+  Zap,
+  Percent,
+  Tag
 } from "lucide-react"
 
 const sidebarLinks = [
   { href: "/admin", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/admin/products", icon: ShoppingBag, label: "Products" },
+  { href: "/admin/categories", icon: Tag, label: "Categories" },
   { href: "/admin/orders", icon: ShoppingCart, label: "Orders" },
   { href: "/admin/orders/new", icon: PlusCircle, label: "New Order" },
   { href: "/admin/customers", icon: Users, label: "Customers" },
@@ -32,6 +36,8 @@ const sidebarLinks = [
   { href: "/admin/purchase-orders", icon: ClipboardList, label: "Purchase Orders" },
   { href: "/admin/expenses", icon: Receipt, label: "Expenses" },
   { href: "/admin/pages", icon: FileText, label: "Pages" },
+  { href: "/admin/flash-sales", icon: Zap, label: "Flash Sales" },
+  { href: "/admin/auto-discounts", icon: Percent, label: "Auto Discounts" },
   { href: "/admin/coupons", icon: Ticket, label: "Coupons" },
   { href: "/admin/loyalty", icon: Gift, label: "Loyalty" },
   { href: "/admin/delivery", icon: Truck, label: "Delivery" },

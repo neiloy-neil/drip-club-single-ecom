@@ -3,8 +3,17 @@
 import { useState, useMemo } from "react"
 import { toast } from "sonner"
 import { useCartStore } from "@/store/useCartStore"
+import NotifyMeForm from "@/components/store/NotifyMeForm"
 
-export default function VariantSelector({ product }: { product: any }) {
+export default function VariantSelector({
+  product,
+  attr1Label = "Size",
+  attr2Label = "Color",
+}: {
+  product: any
+  attr1Label?: string
+  attr2Label?: string
+}) {
   const variants = product.variants || []
   const addItem = useCartStore((s) => s.addItem)
 
@@ -48,11 +57,11 @@ export default function VariantSelector({ product }: { product: any }) {
 
   return (
     <div className="space-y-8">
-      {/* Colors */}
+      {/* Colors / Attribute 2 */}
       {colors.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-baseline justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-widest text-drip-black">Color</h3>
+            <h3 className="text-xs font-bold uppercase tracking-widest text-drip-black">{attr2Label}</h3>
             <span className="text-xs text-drip-text-muted">{selectedColor}</span>
           </div>
           <div className="flex flex-wrap gap-4">
@@ -87,11 +96,11 @@ export default function VariantSelector({ product }: { product: any }) {
         </div>
       )}
 
-      {/* Sizes */}
+      {/* Sizes / Attribute 1 */}
       {sizes.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-baseline justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-widest text-drip-black">Size</h3>
+            <h3 className="text-xs font-bold uppercase tracking-widest text-drip-black">{attr1Label}</h3>
             <button className="text-xs text-drip-text-muted underline underline-offset-4 hover:text-drip-gold transition-colors">Size Guide</button>
           </div>
           <div className="grid grid-cols-4 sm:grid-cols-5 gap-3">
@@ -132,14 +141,17 @@ export default function VariantSelector({ product }: { product: any }) {
 
       {/* Action */}
       <div className="pt-4 space-y-4">
-        <button
-          onClick={addToCart}
-          disabled={isOutOfStock || !activeVariant}
-          className={`w-full py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2
-            ${isOutOfStock ? 'bg-drip-muted text-drip-text-muted cursor-not-allowed border border-drip-border' : 'bg-drip-black text-white hover:bg-drip-gold hover:shadow-lg hover:shadow-drip-gold/20'}`}
-        >
-          {isOutOfStock ? 'Out of Stock' : 'Add to Bag'}
-        </button>
+        {!isOutOfStock ? (
+          <button
+            onClick={addToCart}
+            disabled={!activeVariant}
+            className="w-full py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 bg-drip-black text-white hover:bg-drip-gold hover:shadow-lg hover:shadow-drip-gold/20"
+          >
+            Add to Bag
+          </button>
+        ) : (
+          <NotifyMeForm variantId={activeVariant?.id || ""} />
+        )}
 
         {stock > 0 && stock <= 5 && (
           <p className="text-xs font-medium text-drip-error flex items-center justify-center gap-2 animate-pulse">

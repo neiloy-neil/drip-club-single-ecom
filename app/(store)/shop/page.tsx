@@ -4,6 +4,7 @@ import { serialize } from "@/lib/utils"
 import Link from "next/link"
 import { Filter, Grid3X3, List as ListIcon, X } from "lucide-react"
 import { redirect } from "next/navigation"
+import { getActiveFlashSaleBatch, applyFlashSaleDiscount } from "@/lib/flashSale"
 
 export default async function ShopPage({
   searchParams
@@ -44,7 +45,12 @@ export default async function ShopPage({
     prisma.category.findMany({ where: { isActive: true } }).catch(() => [])
   ])
 
-  const hasMore = totalProducts > take;
+  const hasMore = totalProducts > take
+
+  // Batch-fetch active flash sales for all products on this page
+  const flashSaleMap = await getActiveFlashSaleBatch(
+    products.map((p: any) => ({ id: p.id, categoryId: p.categoryId }))
+  ).catch(() => new Map())
 
   return (
     <div className="container mx-auto px-4 py-8 md:py-12 animate-in fade-in duration-500">
@@ -178,7 +184,22 @@ export default async function ShopPage({
           ) : (
             <>
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-10 md:gap-x-8 md:gap-y-12">
-                {serialize(products).map((product: any) => <ProductCard key={product.id} product={product} />)}
+                {serialize(products).map((product: any) => {
+                  const sale = flashSaleMap.get(product.id)
+                  const flashSalePrice = sale
+                    ? applyFlashSaleDiscount(Number(product.price), sale)
+                    : undefined
+                  return (
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      flashSalePrice={flashSalePrice}
+                      flashSaleLabel={sale
+                        ? (sale.discountType === "PERCENTAGE" ? `${sale.discountValue}% off` : `৳${sale.discountValue} off`)
+                        : undefined}
+                    />
+                  )
+                })}
               </div>
               
               {/* Load More */}

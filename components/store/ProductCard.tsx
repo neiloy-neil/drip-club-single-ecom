@@ -4,7 +4,15 @@ import { Heart, ShoppingBag } from "lucide-react"
 import { useWishlistStore } from "@/store/useWishlistStore"
 import { toast } from "sonner"
 
-export default function ProductCard({ product }: { product: any }) {
+export default function ProductCard({
+  product,
+  flashSalePrice,
+  flashSaleLabel,
+}: {
+  product: any
+  flashSalePrice?: number
+  flashSaleLabel?: string
+}) {
   const { toggleItem, isWishlisted } = useWishlistStore()
   const wishlisted = isWishlisted(product.id)
 
@@ -13,10 +21,14 @@ export default function ProductCard({ product }: { product: any }) {
   const hoverImage = images[1]?.url || thumbnail
 
   const isNew = (Date.now() - new Date(product.createdAt).getTime()) < 1000 * 60 * 60 * 24 * 7
-  const hasSale = !!product.comparePrice
+  const hasSale = !!product.comparePrice || !!flashSalePrice
+  const hasFlashSale = !!flashSalePrice
+  const displayPrice = flashSalePrice ?? Number(product.price)
   const isLowStock = product.variants?.reduce((acc: number, v: any) => acc + v.stock, 0) < 5
-  const discountPercent = hasSale
+  const discountPercent = product.comparePrice
     ? Math.round(((Number(product.comparePrice) - Number(product.price)) / Number(product.comparePrice)) * 100)
+    : flashSalePrice
+    ? Math.round(((Number(product.price) - flashSalePrice) / Number(product.price)) * 100)
     : 0
   const sizes = Array.from(new Set(product.variants?.map((v: any) => v.size) || ["S", "M", "L"]))
 
@@ -54,7 +66,8 @@ export default function ProductCard({ product }: { product: any }) {
         {/* Badges */}
         <div className="absolute top-2 left-2 flex flex-col gap-1 pointer-events-none">
           {isNew && <span className="bg-drip-black text-white text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full">New</span>}
-          {hasSale && <span className="bg-drip-gold text-white text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full">Sale</span>}
+          {hasFlashSale && <span className="bg-drip-error text-white text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full flex items-center gap-1">⚡ {flashSaleLabel}</span>}
+          {!hasFlashSale && hasSale && <span className="bg-drip-gold text-white text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full">Sale</span>}
           {isLowStock && <span className="bg-drip-error text-white text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full">Low Stock</span>}
         </div>
 
@@ -87,11 +100,17 @@ export default function ProductCard({ product }: { product: any }) {
           {product.name}
         </Link>
         <div className="flex items-center gap-2 mt-0.5">
-          <span className="font-mono font-medium text-sm">৳{Number(product.price).toLocaleString()}</span>
-          {hasSale && (
+          <span className={`font-mono font-medium text-sm ${hasFlashSale ? "text-drip-error" : ""}`}>
+            ৳{displayPrice.toLocaleString()}
+          </span>
+          {(hasSale || hasFlashSale) && (
             <>
-              <span className="font-mono text-xs text-drip-text-muted line-through">৳{Number(product.comparePrice).toLocaleString()}</span>
-              <span className="text-[10px] text-drip-success font-bold bg-drip-success/10 px-1.5 py-0.5 rounded">-{discountPercent}%</span>
+              <span className="font-mono text-xs text-drip-text-muted line-through">
+                ৳{Number(product.price).toLocaleString()}
+              </span>
+              <span className="text-[10px] text-drip-success font-bold bg-drip-success/10 px-1.5 py-0.5 rounded">
+                -{discountPercent}%
+              </span>
             </>
           )}
         </div>

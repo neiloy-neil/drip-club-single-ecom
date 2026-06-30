@@ -1,37 +1,72 @@
 "use client"
 
 import Link from "next/link"
-import { Search, Heart, User, Menu, X } from "lucide-react"
-import { useState } from "react"
+import { Search, Heart, User, Menu, X, Zap } from "lucide-react"
+import { useState, useEffect } from "react"
 import { useCartStore } from "@/store/useCartStore"
 import { useWishlistStore } from "@/store/useWishlistStore"
 import CartDrawer from "@/components/store/CartDrawer"
 import SearchModal from "@/components/store/SearchModal"
 
 type NavCategory = { id: string; name: string; slug: string }
+type NavFlashSale = { name: string; discountType: string; discountValue: number; endsAt: string }
+
+function useCountdown(endsAt: string) {
+  const [label, setLabel] = useState("")
+  useEffect(() => {
+    const tick = () => {
+      const diff = new Date(endsAt).getTime() - Date.now()
+      if (diff <= 0) { setLabel(""); return }
+      const h = Math.floor(diff / 3600000), m = Math.floor((diff % 3600000) / 60000), s = Math.floor((diff % 60000) / 1000)
+      const pad = (n: number) => String(n).padStart(2, "0")
+      setLabel(`${pad(h)}:${pad(m)}:${pad(s)}`)
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [endsAt])
+  return label
+}
 
 export default function Navbar({
   freeShippingThreshold = 1000,
   storeName = "DRIP",
   storeTagline = "Wear Your Story",
   categories = [],
+  activeFlashSale = null,
 }: {
   freeShippingThreshold?: number
   storeName?: string
   storeTagline?: string
   categories?: NavCategory[]
+  activeFlashSale?: NavFlashSale | null
 }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const itemCount = useCartStore((s) => s.items.reduce((acc, i) => acc + i.quantity, 0))
   const wishlistCount = useWishlistStore((s) => s.items.length)
   const navCategories = categories.slice(0, 4)
+  const flashCountdown = useCountdown(activeFlashSale?.endsAt || "")
+  const flashLabel = activeFlashSale
+    ? activeFlashSale.discountType === "PERCENTAGE"
+      ? `${activeFlashSale.discountValue}% off`
+      : `৳${activeFlashSale.discountValue} off`
+    : ""
 
   return (
     <>
       {/* Announcement Bar */}
-      <div className="bg-drip-black text-drip-surface text-center py-2 text-xs md:text-sm font-medium tracking-wide overflow-hidden">
-        <p className="whitespace-nowrap">Free delivery on orders above ৳{freeShippingThreshold} 🚚</p>
+      <div className={`text-drip-surface text-center py-2 text-xs md:text-sm font-medium tracking-wide overflow-hidden transition-colors ${activeFlashSale && flashCountdown ? "bg-drip-error" : "bg-drip-black"}`}>
+        {activeFlashSale && flashCountdown ? (
+          <p className="whitespace-nowrap flex items-center justify-center gap-2">
+            <Zap className="w-3 h-3 inline" />
+            <span>{activeFlashSale.name} — {flashLabel} sitewide!</span>
+            <span className="font-mono">Ends in {flashCountdown}</span>
+            <Zap className="w-3 h-3 inline" />
+          </p>
+        ) : (
+          <p className="whitespace-nowrap">Free delivery on orders above ৳{freeShippingThreshold} 🚚</p>
+        )}
       </div>
 
       <header className="sticky top-0 z-50 w-full border-b border-drip-border bg-drip-surface/80 backdrop-blur-md">

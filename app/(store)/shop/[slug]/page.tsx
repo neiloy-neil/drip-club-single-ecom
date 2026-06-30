@@ -5,9 +5,11 @@ import ProductGallery from "@/components/store/ProductGallery"
 import VariantSelector from "@/components/store/VariantSelector"
 import ProductCard from "@/components/store/ProductCard"
 import ReviewSection from "@/components/store/ReviewSection"
+import FlashSaleCountdown from "@/components/store/FlashSaleCountdown"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Truck, RefreshCw, ShieldCheck } from "lucide-react"
 import type { Metadata } from "next"
+import { getActiveFlashSale, applyFlashSaleDiscount } from "@/lib/flashSale"
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://drip.com.bd"
 
@@ -54,11 +56,20 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     notFound()
   }
 
-  const reviewAgg = await prisma.review.aggregate({
-    where: { productId: product.id, isApproved: true },
-    _avg: { rating: true },
-    _count: { rating: true },
-  }).catch(() => ({ _avg: { rating: 0 }, _count: { rating: 0 } }))
+  const [reviewAgg, flashSale, attrConfig] = await Promise.all([
+    prisma.review.aggregate({
+      where: { productId: product.id, isApproved: true },
+      _avg: { rating: true },
+      _count: { rating: true },
+    }).catch(() => ({ _avg: { rating: 0 }, _count: { rating: 0 } })),
+    getActiveFlashSale(product.id, product.categoryId).catch(() => null),
+    prisma.categoryAttributeConfig.findUnique({
+      where: { categoryId: product.categoryId },
+    }).catch(() => null),
+  ])
+
+  const salePrice = flashSale ? applyFlashSaleDiscount(Number(product.price), flashSale) : null
+  const displayPrice = salePrice ?? Number(product.price)
 
   // Fetch related products
   const relatedProducts = await prisma.product.findMany({
@@ -134,18 +145,42 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                 </div>
               )}
               <div className="flex items-center gap-4">
-                <span className="font-mono text-2xl font-bold">৳{Number(product.price).toLocaleString()}</span>
-                {product.comparePrice && (
-                  <span className="font-mono text-lg text-drip-text-muted line-through">৳{Number(product.comparePrice).toLocaleString()}</span>
+                <span className="font-mono text-2xl font-bold">৳{displayPrice.toLocaleString()}</span>
+                {(product.comparePrice || (flashSale && Number(product.price) !== displayPrice)) && (
+                  <span className="font-mono text-lg text-drip-text-muted line-through">
+                    ৳{Number(product.price).toLocaleString()}
+                  </span>
                 )}
-                {product.comparePrice && (
+                {flashSale && (
+                  <span className="bg-drip-error text-white px-2 py-1 text-xs font-bold rounded uppercase tracking-widest">
+                    {flashSale.discountType === "PERCENTAGE"
+                      ? `${flashSale.discountValue}% off`
+                      : `৳${flashSale.discountValue} off`}
+                  </span>
+                )}
+                {!flashSale && product.comparePrice && (
                   <span className="bg-drip-error/10 text-drip-error px-2 py-1 text-xs font-bold rounded uppercase tracking-widest">Sale</span>
                 )}
               </div>
+              {flashSale && (
+                <div className="mt-4">
+                  <FlashSaleCountdown
+                    saleName={flashSale.name}
+                    discountLabel={flashSale.discountType === "PERCENTAGE"
+                      ? `${flashSale.discountValue}% off`
+                      : `৳${flashSale.discountValue} off`}
+                    endsAt={flashSale.endsAt.toISOString()}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Selectors */}
-            <VariantSelector product={serialize(product)} />
+            <VariantSelector
+              product={serialize(product)}
+              attr1Label={attrConfig?.attr1Label || "Size"}
+              attr2Label={attrConfig?.attr2Label || "Color"}
+            />
 
             {/* Accordions for extra info */}
             <div className="mt-12 border-t border-drip-border">

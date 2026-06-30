@@ -15,6 +15,7 @@ export default function CartPage() {
   const [couponLoading, setCouponLoading] = useState(false)
   const [useLoyalty, setUseLoyalty] = useState(false)
   const [freeShippingThreshold, setFreeShippingThreshold] = useState<number | null>(null)
+  const [autoDiscount, setAutoDiscount] = useState<{ name: string; savingAmount: number; discountPct: number } | null>(null)
 
   useEffect(() => {
     fetch("/api/settings")
@@ -26,9 +27,29 @@ export default function CartPage() {
   }, [])
 
   const subtotal = items.reduce((acc, item) => acc + (item.price * item.quantity), 0)
+
+  // Re-check auto discounts whenever cart changes
+  useEffect(() => {
+    if (!items.length) { setAutoDiscount(null); return }
+    fetch("/api/store/auto-discount", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: items.map((i) => ({
+          variantId: i.variantId, productId: i.productId, quantity: i.quantity, price: i.price,
+        })),
+        subtotal,
+      }),
+    })
+      .then((r) => r.json())
+      .then((d) => setAutoDiscount(d.discount || null))
+      .catch(() => {})
+  }, [items.length, subtotal])
+
   const loyaltyPoints = 0 // Fetched at checkout when user is authenticated
   const loyaltyValue = useLoyalty ? Math.min(loyaltyPoints * 0.1, subtotal * 0.2) : 0
-  const finalTotal = subtotal - loyaltyValue - couponDiscount
+  const autoDiscountAmount = autoDiscount?.savingAmount || 0
+  const finalTotal = subtotal - loyaltyValue - couponDiscount - autoDiscountAmount
 
   const remainingForFreeShipping = freeShippingThreshold ? Math.max(0, freeShippingThreshold - subtotal) : 0
   const freeShippingProgress = freeShippingThreshold ? Math.min(100, (subtotal / freeShippingThreshold) * 100) : 0
@@ -192,6 +213,14 @@ export default function CartPage() {
                 <span className="text-drip-text-muted">Subtotal</span>
                 <span className="font-mono">৳{subtotal.toLocaleString()}</span>
               </div>
+              {autoDiscount && autoDiscountAmount > 0 && (
+                <div className="flex justify-between text-drip-success font-medium">
+                  <span className="flex items-center gap-1">
+                    <span className="text-xs">🎉</span> {autoDiscount.name}
+                  </span>
+                  <span className="font-mono">-৳{autoDiscountAmount.toLocaleString()}</span>
+                </div>
+              )}
               {couponDiscount > 0 && (
                 <div className="flex justify-between text-drip-success font-medium">
                   <span>Coupon ({appliedCode})</span>

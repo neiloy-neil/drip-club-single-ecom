@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { getCustomerRisk } from "@/lib/customerRisk"
+import { getBestAutoDiscount } from "@/lib/autoDiscount"
 
 export async function POST(req: Request) {
   try {
@@ -64,7 +65,18 @@ export async function POST(req: Request) {
     const taxEnabled = taxEnabledSetting?.value === "true"
     const taxRate = Number(taxRateSetting?.value || 0)
     const serverTaxAmount = taxEnabled ? Math.round((serverSubtotal * taxRate) / 100) : 0
-    const serverTotal = serverSubtotal + serverShippingCharge + serverTaxAmount
+
+    // Auto discount (bulk/tiered) — server-side validation, never trust client
+    const cartItems = items.map((item: any) => ({
+      variantId: item.variantId,
+      productId: item.productId,
+      quantity: item.quantity,
+      price: Number(variantMap[item.variantId].product.price),
+    }))
+    const autoDiscount = await getBestAutoDiscount(cartItems, serverSubtotal).catch(() => null)
+    const autoDiscountAmount = autoDiscount?.savingAmount || 0
+
+    const serverTotal = serverSubtotal + serverShippingCharge + serverTaxAmount - autoDiscountAmount
 
     const order = await prisma.$transaction(async (tx) => {
       // Re-check stock inside transaction to prevent race conditions
@@ -93,7 +105,7 @@ export async function POST(req: Request) {
           total: serverTotal,
           subtotal: serverSubtotal,
           shippingCharge: serverShippingCharge,
-          discount: Math.max(0, serverSubtotal - subtotal), // capture any coupon/loyalty discount
+          discount: Math.max(0, autoDiscountAmount), // auto discount (bulk/tiered) applied server-side
           shippingName: address.name,
           shippingPhone: address.phone,
           shippingAddress: address.fullAddress,

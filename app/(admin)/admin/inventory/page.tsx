@@ -1,5 +1,7 @@
 import prisma from "@/lib/prisma"
 import { InventoryClient } from "./InventoryClient"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Bell } from "lucide-react"
 
 export default async function InventoryPage({
   searchParams,
@@ -39,6 +41,12 @@ export default async function InventoryPage({
 
   const categories = await prisma.category.findMany()
 
+  const stockAlerts = await prisma.stockAlert.findMany({
+    where: { notified: false },
+    include: { variant: { include: { product: { select: { name: true, slug: true } } } } },
+    orderBy: { createdAt: "desc" },
+  })
+
   const data = variants.map((v) => ({
     id: v.id,
     productName: v.product.name,
@@ -54,11 +62,35 @@ export default async function InventoryPage({
       <div className="flex items-center justify-between space-y-2">
         <h2 className="text-3xl font-bold tracking-tight">Inventory</h2>
       </div>
-      <InventoryClient 
-        data={data} 
-        categories={categories} 
-        lowStockCount={lowStockCount} 
+      <InventoryClient
+        data={data}
+        categories={categories}
+        lowStockCount={lowStockCount}
       />
+
+      {stockAlerts.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5 text-drip-gold" />
+              Back-in-Stock Requests ({stockAlerts.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="divide-y text-sm">
+              {stockAlerts.map((a) => (
+                <div key={a.id} className="py-3 flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">{a.variant.product.name}</p>
+                    <p className="text-muted-foreground text-xs">{a.variant.size} / {a.variant.color}</p>
+                  </div>
+                  <p className="text-muted-foreground">{a.email}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

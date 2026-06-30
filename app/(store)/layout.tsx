@@ -1,6 +1,7 @@
 import Navbar from "@/components/store/Navbar";
 import Footer from "@/components/store/Footer";
 import prisma from "@/lib/prisma";
+import { getActiveFlashSaleBatch, applyFlashSaleDiscount } from "@/lib/flashSale";
 
 const SETTING_KEYS = [
   "free_shipping_above",
@@ -19,13 +20,18 @@ export default async function StoreLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [settings, categories] = await Promise.all([
+  const now = new Date()
+  const [settings, categories, sitewideSale] = await Promise.all([
     prisma.setting.findMany({ where: { key: { in: SETTING_KEYS } } }),
     prisma.category.findMany({
       where: { isActive: true, parentId: null },
       orderBy: { sortOrder: "asc" },
       select: { id: true, name: true, slug: true },
     }).catch(() => []),
+    prisma.flashSale.findFirst({
+      where: { scope: "SITEWIDE", isActive: true, startsAt: { lte: now }, endsAt: { gte: now } },
+      orderBy: { createdAt: "desc" },
+    }).catch(() => null),
   ])
 
   const settingsMap = Object.fromEntries(settings.map((s) => [s.key, s.value]))
@@ -51,6 +57,12 @@ export default async function StoreLayout({
         storeName={branding.storeName}
         storeTagline={branding.storeTagline}
         categories={categories}
+        activeFlashSale={sitewideSale ? {
+          name: sitewideSale.name,
+          discountType: sitewideSale.discountType,
+          discountValue: Number(sitewideSale.discountValue),
+          endsAt: sitewideSale.endsAt.toISOString(),
+        } : null}
       />
       <main className="flex-1">
         {children}
