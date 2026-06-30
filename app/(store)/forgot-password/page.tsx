@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { ArrowLeft, Mail } from "lucide-react"
 import { useState } from "react"
-import { toast } from "sonner"
+import { createClient } from "@/lib/supabase/client"
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("")
@@ -12,10 +12,9 @@ export default function ForgotPasswordPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     try {
-      await fetch("/api/auth/forgot-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+      const supabase = createClient()
+      await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
       })
     } catch { /* swallow — we always show success to prevent enumeration */ }
     setSubmitted(true)

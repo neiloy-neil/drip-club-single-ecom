@@ -10,77 +10,30 @@ datasource db {
 // AUTH & USERS
 // ─────────────────────────────────────────────
 
+// User.id mirrors the Supabase auth.users.id (UUID) — assigned explicitly at
+// signup time, not auto-generated, so it stays in sync with auth.users.
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  emailVerified DateTime?
-  image         String?
-  phone         String?
-  role          Role      @default(CUSTOMER)
-  password      String?   // hashed, for email/password login
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id        String   @id
+  name      String?
+  email     String   @unique
+  image     String?
+  phone     String?
+  role      Role     @default(CUSTOMER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  accounts      Account[]
-  sessions      Session[]
   addresses     Address[]
   orders        Order[]
   loyaltyPoints LoyaltyPoint[]
   reviews       Review[]
 
-  passwordResetToken PasswordResetToken?
-
   @@map("users")
-}
-
-model PasswordResetToken {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  token     String   @unique
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("password_reset_tokens")
 }
 
 enum Role {
   CUSTOMER
   STAFF
   ADMIN
-}
-
-model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String?
-  access_token      String?
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String?
-  session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-  @@map("accounts")
-}
-
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("sessions")
 }
 
 // ─────────────────────────────────────────────

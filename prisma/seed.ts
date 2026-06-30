@@ -1,24 +1,59 @@
 import { Role, DiscountType } from '@prisma/client'
 import { PrismaClient } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
-import bcrypt from 'bcryptjs'
-import 'dotenv/config'
+import { createClient } from '@supabase/supabase-js'
+import { config } from 'dotenv'
+
+config({ path: '.env.local' })
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
 const prisma = new PrismaClient({ adapter })
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { persistSession: false } }
+)
 
 async function main() {
   console.log('🌱 Seeding database...')
 
   // ─── Admin User ───────────────────────────────────────────────
-  const hashedPassword = await bcrypt.hash('Admin@1234', 12)
+  // Reconcile against Supabase auth.users (source of truth for the id) rather
+  // than just checking Prisma — a stale Prisma row can exist with an id that
+  // has no matching Supabase auth user (e.g. left over from the NextAuth era).
+  const { data: existingAuthUsers } = await supabaseAdmin.auth.admin.listUsers()
+  let authUser = existingAuthUsers.users.find((u) => u.email === 'admin@store.com')
+
+  if (!authUser) {
+    const { data, error } = await supabaseAdmin.auth.admin.createUser({
+      email: 'admin@store.com',
+      password: 'Admin@1234',
+      email_confirm: true,
+      app_metadata: { role: 'ADMIN' },
+      user_metadata: { name: 'Admin' },
+    })
+    if (error) throw error
+    authUser = data.user
+  } else {
+    await supabaseAdmin.auth.admin.updateUserById(authUser.id, {
+      app_metadata: { role: 'ADMIN' },
+      user_metadata: { name: 'Admin' },
+    })
+  }
+
+  const stalePrismaAdmin = await prisma.user.findUnique({ where: { email: 'admin@store.com' } })
+  if (stalePrismaAdmin && stalePrismaAdmin.id !== authUser.id) {
+    await prisma.user.delete({ where: { id: stalePrismaAdmin.id } })
+  }
+
   const admin = await prisma.user.upsert({
-    where: { email: 'admin@store.com' },
-    update: {},
+    where: { id: authUser.id },
+    update: { role: Role.ADMIN },
     create: {
+      id: authUser.id,
       name: 'Admin',
       email: 'admin@store.com',
-      password: hashedPassword,
       role: Role.ADMIN,
     },
   })

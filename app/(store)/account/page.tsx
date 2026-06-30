@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useSession, signOut } from "next-auth/react"
+import { useSession, signOut } from "@/hooks/useSession"
 import { useRouter } from "next/navigation"
 import { User, Package, MapPin, Gift, LogOut } from "lucide-react"
 import { toast } from "sonner"

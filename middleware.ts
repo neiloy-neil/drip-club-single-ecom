@@ -1,32 +1,53 @@
-import NextAuth from "next-auth"
-import { authConfig } from "@/lib/auth.config"
-import { NextResponse } from "next/server"
+import { createServerClient } from "@supabase/ssr"
+import { NextResponse, type NextRequest } from "next/server"
 
-export default NextAuth(authConfig).auth((req) => {
-  const { nextUrl } = req
-  const isLoggedIn = !!req.auth
-  const role = req.auth?.user?.role
+export async function middleware(request: NextRequest) {
+  let response = NextResponse.next({ request })
 
-  const isAdminRoute = nextUrl.pathname.startsWith('/admin')
-  const isAccountRoute = nextUrl.pathname.startsWith('/account')
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          response = NextResponse.next({ request })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          )
+        },
+      },
+    }
+  )
+
+  // Refreshes the session cookie if expired — required for SSR auth to work.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  const { pathname } = request.nextUrl
+  const isAdminRoute = pathname.startsWith("/admin")
+  const isAccountRoute = pathname.startsWith("/account")
+  const role = (user?.app_metadata as { role?: string } | undefined)?.role
 
   if (isAdminRoute) {
-    if (!isLoggedIn) {
-      return NextResponse.redirect(new URL('/login', nextUrl))
+    if (!user) {
+      return NextResponse.redirect(new URL("/login", request.url))
     }
-    if (role !== 'ADMIN') {
-      return NextResponse.redirect(new URL('/', nextUrl))
-    }
-  }
-
-  if (isAccountRoute) {
-    if (!isLoggedIn) {
-      return NextResponse.redirect(new URL('/login', nextUrl))
+    if (role !== "ADMIN") {
+      return NextResponse.redirect(new URL("/", request.url))
     }
   }
 
-  return NextResponse.next()
-})
+  if (isAccountRoute && !user) {
+    return NextResponse.redirect(new URL("/login", request.url))
+  }
+
+  return response
+}
 
 export const config = {
   matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],

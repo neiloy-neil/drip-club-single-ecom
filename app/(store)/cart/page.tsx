@@ -1,9 +1,9 @@
 "use client"
 
 import { useCartStore } from "@/store/useCartStore"
-import { Trash2, Minus, Plus, ShoppingBag, ShieldCheck, ArrowRight } from "lucide-react"
+import { Trash2, Minus, Plus, ShoppingBag, ShieldCheck, ArrowRight, Truck } from "lucide-react"
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Switch } from "@/components/ui/switch"
 import { toast } from "sonner"
 
@@ -14,11 +14,24 @@ export default function CartPage() {
   const [appliedCode, setAppliedCode] = useState("")
   const [couponLoading, setCouponLoading] = useState(false)
   const [useLoyalty, setUseLoyalty] = useState(false)
+  const [freeShippingThreshold, setFreeShippingThreshold] = useState<number | null>(null)
+
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.free_shipping_above) setFreeShippingThreshold(Number(d.free_shipping_above))
+      })
+      .catch(() => {})
+  }, [])
 
   const subtotal = items.reduce((acc, item) => acc + (item.price * item.quantity), 0)
   const loyaltyPoints = 0 // Fetched at checkout when user is authenticated
   const loyaltyValue = useLoyalty ? Math.min(loyaltyPoints * 0.1, subtotal * 0.2) : 0
   const finalTotal = subtotal - loyaltyValue - couponDiscount
+
+  const remainingForFreeShipping = freeShippingThreshold ? Math.max(0, freeShippingThreshold - subtotal) : 0
+  const freeShippingProgress = freeShippingThreshold ? Math.min(100, (subtotal / freeShippingThreshold) * 100) : 0
 
   async function handleApplyCoupon() {
     if (!coupon.trim()) return
@@ -125,7 +138,28 @@ export default function CartPage() {
         <div className="lg:w-1/3">
           <div className="bg-drip-surface border border-drip-border rounded-2xl p-6 md:p-8 sticky top-24">
             <h2 className="text-2xl font-heading font-bold mb-6">Order Summary</h2>
-            
+
+            {freeShippingThreshold !== null && (
+              <div className="mb-6 p-4 rounded-lg bg-drip-muted/30 border border-drip-border">
+                {remainingForFreeShipping > 0 ? (
+                  <p className="text-xs text-drip-text-muted mb-2 flex items-center gap-1.5">
+                    <Truck className="w-3.5 h-3.5 text-drip-gold" />
+                    Add <span className="font-bold text-drip-black">৳{remainingForFreeShipping.toLocaleString()}</span> more for free shipping
+                  </p>
+                ) : (
+                  <p className="text-xs text-drip-success font-bold mb-2 flex items-center gap-1.5">
+                    <Truck className="w-3.5 h-3.5" /> You've unlocked free shipping!
+                  </p>
+                )}
+                <div className="h-1.5 w-full bg-drip-border rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-drip-gold transition-all duration-500 rounded-full"
+                    style={{ width: `${freeShippingProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="space-y-4 mb-6">
               <div className="flex items-center gap-2 border border-drip-border rounded-lg bg-drip-muted/30 p-1">
                 <input

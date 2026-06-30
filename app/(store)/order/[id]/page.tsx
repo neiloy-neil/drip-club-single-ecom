@@ -1,8 +1,18 @@
 import prisma from "@/lib/prisma"
 import { redirect } from "next/navigation"
-import { Check, X, ShoppingBag, MapPin, CreditCard, Gift } from "lucide-react"
+import { Check, X, ShoppingBag, MapPin, CreditCard, Gift, Package, Truck, Home, Ban } from "lucide-react"
 import Link from "next/link"
 import { getBalance } from "@/lib/loyalty"
+
+const STATUS_STEPS = ["PENDING", "CONFIRMED", "PACKED", "SHIPPED", "DELIVERED"] as const
+
+const STATUS_META: Record<string, { label: string; icon: any }> = {
+  PENDING: { label: "Order Placed", icon: ShoppingBag },
+  CONFIRMED: { label: "Confirmed", icon: Check },
+  PACKED: { label: "Packed", icon: Package },
+  SHIPPED: { label: "Shipped", icon: Truck },
+  DELIVERED: { label: "Delivered", icon: Home },
+}
 
 export default async function OrderConfirmationPage({ 
   params, 
@@ -28,6 +38,7 @@ export default async function OrderConfirmationPage({
       },
       payment: true,
       delivery: true,
+      statusLogs: { orderBy: { createdAt: "asc" } },
     }
   })
 
@@ -76,6 +87,50 @@ export default async function OrderConfirmationPage({
 
       <div className="flex flex-col lg:flex-row gap-12">
         <div className="w-full lg:w-3/5 space-y-8">
+          {/* Status Timeline */}
+          {order.status === "CANCELLED" || order.status === "RETURNED" ? (
+            <section className="bg-white border border-drip-border rounded-2xl p-6 md:p-8">
+              <div className="flex items-center gap-3 text-drip-error">
+                <Ban className="w-5 h-5" />
+                <h2 className="text-lg font-heading font-bold">
+                  Order {order.status === "CANCELLED" ? "Cancelled" : "Returned"}
+                </h2>
+              </div>
+            </section>
+          ) : (
+            <section className="bg-white border border-drip-border rounded-2xl p-6 md:p-8">
+              <h2 className="text-xl font-heading font-bold mb-8">Order Status</h2>
+              <div className="flex items-start justify-between relative">
+                <div className="absolute top-5 left-0 right-0 h-0.5 bg-drip-border" />
+                {STATUS_STEPS.map((step, idx) => {
+                  const currentIdx = STATUS_STEPS.indexOf(order.status as any)
+                  const isDone = currentIdx >= idx
+                  const log = order.statusLogs.find((l) => l.status === step)
+                  const Icon = STATUS_META[step].icon
+                  return (
+                    <div key={step} className="relative flex flex-col items-center gap-2 flex-1 z-10">
+                      <div
+                        className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors ${
+                          isDone ? "bg-drip-gold border-drip-gold text-white" : "bg-white border-drip-border text-drip-text-muted"
+                        }`}
+                      >
+                        <Icon className="w-4 h-4" />
+                      </div>
+                      <p className={`text-[10px] font-bold uppercase tracking-widest text-center ${isDone ? "text-drip-black" : "text-drip-text-muted"}`}>
+                        {STATUS_META[step].label}
+                      </p>
+                      {log && (
+                        <p className="text-[10px] text-drip-text-muted text-center">
+                          {new Date(log.createdAt).toLocaleDateString("en-BD", { day: "numeric", month: "short" })}
+                        </p>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+          )}
+
           {/* Order Summary */}
           <section className="bg-white border border-drip-border rounded-2xl p-6 md:p-8">
             <h2 className="text-xl font-heading font-bold mb-6 flex items-center gap-3">

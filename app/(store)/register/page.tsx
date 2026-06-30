@@ -4,7 +4,7 @@ import Link from "next/link"
 import { ArrowRight } from "lucide-react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { signIn } from "next-auth/react"
+import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 
 export default function RegisterPage() {
@@ -14,6 +14,16 @@ export default function RegisterPage() {
   const [phone, setPhone] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
+  const [oauthLoading, setOauthLoading] = useState<"google" | "facebook" | null>(null)
+
+  async function handleOAuth(provider: "google" | "facebook") {
+    setOauthLoading(provider)
+    const supabase = createClient()
+    await supabase.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: `${window.location.origin}/api/auth/callback` },
+    })
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -23,25 +33,41 @@ export default function RegisterPage() {
     }
     setLoading(true)
     try {
+      const supabase = createClient()
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { name, phone } },
+      })
+
+      if (error) {
+        toast.error(error.message || "Registration failed")
+        return
+      }
+      if (!data.user) {
+        toast.error("Registration failed")
+        return
+      }
+
+      // Create the matching Prisma profile + sync role into app_metadata
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, phone }),
+        body: JSON.stringify({ id: data.user.id, name, email, phone }),
       })
-      const data = await res.json()
       if (!res.ok) {
-        toast.error(data.error || "Registration failed")
+        const d = await res.json()
+        toast.error(d.error || "Failed to set up account")
         return
       }
-      // Auto sign-in after registration
-      const result = await signIn("credentials", { email, password, redirect: false })
-      if (result?.error) {
-        toast.success("Account created! Please sign in.")
-        router.push("/login")
-      } else {
+
+      if (data.session) {
         toast.success("Welcome to DRIP! 🎉")
         router.push("/account")
         router.refresh()
+      } else {
+        toast.success("Account created! Check your email to confirm, then sign in.")
+        router.push("/login")
       }
     } catch {
       toast.error("Something went wrong. Please try again.")
@@ -117,6 +143,31 @@ export default function RegisterPage() {
               {loading ? "Creating Account..." : <> Create Account <ArrowRight className="w-4 h-4" /> </>}
             </button>
           </form>
+
+          <div className="flex items-center gap-4">
+            <div className="flex-1 h-px bg-drip-border" />
+            <span className="text-[10px] uppercase tracking-widest text-drip-text-muted">Or continue with</span>
+            <div className="flex-1 h-px bg-drip-border" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => handleOAuth("google")}
+              disabled={oauthLoading !== null}
+              className="py-3 border border-drip-border rounded-full text-xs font-bold flex items-center justify-center gap-2 hover:border-drip-black transition-colors disabled:opacity-50"
+            >
+              {oauthLoading === "google" ? "Redirecting..." : "Google"}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleOAuth("facebook")}
+              disabled={oauthLoading !== null}
+              className="py-3 border border-drip-border rounded-full text-xs font-bold flex items-center justify-center gap-2 hover:border-drip-black transition-colors disabled:opacity-50"
+            >
+              {oauthLoading === "facebook" ? "Redirecting..." : "Facebook"}
+            </button>
+          </div>
 
           <p className="text-center text-sm text-drip-text-muted pt-4 border-t border-drip-border">
             Already have an account?{" "}

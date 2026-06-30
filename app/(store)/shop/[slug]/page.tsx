@@ -4,6 +4,7 @@ import { notFound } from "next/navigation"
 import ProductGallery from "@/components/store/ProductGallery"
 import VariantSelector from "@/components/store/VariantSelector"
 import ProductCard from "@/components/store/ProductCard"
+import ReviewSection from "@/components/store/ReviewSection"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Truck, RefreshCw, ShieldCheck } from "lucide-react"
 import type { Metadata } from "next"
@@ -53,6 +54,12 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     notFound()
   }
 
+  const reviewAgg = await prisma.review.aggregate({
+    where: { productId: product.id, isApproved: true },
+    _avg: { rating: true },
+    _count: { rating: true },
+  }).catch(() => ({ _avg: { rating: 0 }, _count: { rating: 0 } }))
+
   // Fetch related products
   const relatedProducts = await prisma.product.findMany({
     where: { 
@@ -72,6 +79,13 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     image: product.images.map((i) => i.url),
     sku: product.variants[0]?.sku || product.id,
     brand: { "@type": "Brand", name: "DRIP" },
+    ...(reviewAgg._count.rating > 0 && {
+      aggregateRating: {
+        "@type": "AggregateRating",
+        ratingValue: (reviewAgg._avg.rating || 0).toFixed(1),
+        reviewCount: reviewAgg._count.rating,
+      },
+    }),
     offers: {
       "@type": "AggregateOffer",
       priceCurrency: "BDT",
@@ -112,7 +126,13 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
             {/* Title & Price */}
             <div className="mb-8">
-              <h1 className="text-3xl lg:text-4xl font-heading font-bold text-drip-black mb-4 leading-tight">{product.name}</h1>
+              <h1 className="text-3xl lg:text-4xl font-heading font-bold text-drip-black mb-2 leading-tight">{product.name}</h1>
+              {reviewAgg._count.rating > 0 && (
+                <div className="flex items-center gap-2 mb-4 text-sm text-drip-text-muted">
+                  <span className="text-drip-gold font-bold">★ {(reviewAgg._avg.rating || 0).toFixed(1)}</span>
+                  <span>({reviewAgg._count.rating} review{reviewAgg._count.rating === 1 ? "" : "s"})</span>
+                </div>
+              )}
               <div className="flex items-center gap-4">
                 <span className="font-mono text-2xl font-bold">৳{Number(product.price).toLocaleString()}</span>
                 {product.comparePrice && (
@@ -169,6 +189,15 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                         <p>We accept bKash, Nagad, and Cash on Delivery.</p>
                       </div>
                     </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="reviews" className="border-drip-border">
+                  <AccordionTrigger className="text-sm font-bold uppercase tracking-widest hover:text-drip-gold hover:no-underline">
+                    Reviews {reviewAgg._count.rating > 0 && `(${reviewAgg._count.rating})`}
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <ReviewSection productId={product.id} />
                   </AccordionContent>
                 </AccordionItem>
 

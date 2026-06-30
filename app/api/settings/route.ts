@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 
 // Public endpoint — only exposes safe tracking/SEO keys
-const PUBLIC_KEYS = ["ga4_id", "meta_pixel_id", "clarity_id", "meta_title", "meta_description", "store_name"]
+const PUBLIC_KEYS = ["ga4_id", "meta_pixel_id", "clarity_id", "meta_title", "meta_description", "store_name", "free_shipping_above"]
 
 export async function GET() {
   try {

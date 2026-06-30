@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { requireAdmin } from "@/lib/adminAuth"
+import { createAdminClient } from "@/lib/supabase"
 
 export async function PATCH(
   request: Request,
@@ -21,6 +22,9 @@ export async function PATCH(
       where: { id },
       data: { role },
     })
+
+    const admin = createAdminClient()
+    await admin.auth.admin.updateUserById(id, { app_metadata: { role } })
 
     return NextResponse.json({ user })
   } catch (error: any) {
@@ -45,6 +49,9 @@ export async function DELETE(
       where: { id },
       data: { role: "CUSTOMER" }, // Remove staff access, make them regular customer
     })
+
+    const admin = createAdminClient()
+    await admin.auth.admin.updateUserById(id, { app_metadata: { role: "CUSTOMER" } })
 
     return NextResponse.json({ success: true })
   } catch (error: any) {

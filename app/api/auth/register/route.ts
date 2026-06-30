@@ -1,33 +1,33 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
-import bcrypt from "bcryptjs"
+import { createAdminClient } from "@/lib/supabase"
 
+// Called right after a successful supabase.auth.signUp() on the client.
+// Creates the matching Prisma profile row and mirrors the role into
+// Supabase app_metadata so middleware can read it at the edge.
 export async function POST(req: Request) {
   try {
-    const body = await req.json()
-    const { name, email, password, phone } = body
+    const { id, name, email, phone } = await req.json()
 
-    if (!name || !email || !password) {
-      return NextResponse.json({ error: "Name, email and password are required" }, { status: 400 })
-    }
-    if (password.length < 8) {
-      return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 })
+    if (!id || !name || !email) {
+      return NextResponse.json({ error: "id, name and email are required" }, { status: 400 })
     }
 
     const existing = await prisma.user.findUnique({ where: { email } })
-    if (existing) {
+    if (existing && existing.id !== id) {
       return NextResponse.json({ error: "An account with this email already exists" }, { status: 409 })
     }
 
-    const hashed = await bcrypt.hash(password, 12)
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashed,
-        phone: phone || null,
-        role: "CUSTOMER",
-      },
+    const user = await prisma.user.upsert({
+      where: { id },
+      update: { name, phone: phone || null },
+      create: { id, name, email, phone: phone || null, role: "CUSTOMER" },
+    })
+
+    const admin = createAdminClient()
+    await admin.auth.admin.updateUserById(id, {
+      app_metadata: { role: user.role },
+      user_metadata: { name },
     })
 
     return NextResponse.json({ id: user.id, name: user.name, email: user.email }, { status: 201 })

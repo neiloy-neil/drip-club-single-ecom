@@ -1,42 +1,40 @@
-import NextAuth from "next-auth"
-import { PrismaAdapter } from "@auth/prisma-adapter"
-import CredentialsProvider from "next-auth/providers/credentials"
-import GoogleProvider from "next-auth/providers/google"
+import { createClient } from "@/lib/supabase/server"
 import prisma from "@/lib/prisma"
-import bcrypt from "bcryptjs"
-import { authConfig } from "./auth.config"
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
-  ...authConfig,
-  adapter: PrismaAdapter(prisma),
-  providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    }),
-    CredentialsProvider({
-      name: "Credentials",
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" }
-      },
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null
-        try {
-          const user = await prisma.user.findUnique({
-            where: { email: credentials.email as string }
-          })
-          if (!user || !user.password) return null
-          const passwordsMatch = await bcrypt.compare(
-            credentials.password as string,
-            user.password
-          )
-          if (passwordsMatch) return user
-          return null
-        } catch {
-          return null
-        }
-      }
-    })
-  ],
-})
+export type AuthSession = {
+  user: {
+    id: string
+    email: string
+    name: string | null
+    role: string
+  }
+} | null
+
+/**
+ * Compatibility shim standing in for NextAuth's auth(). Keeps the same
+ * { user: { id, email, name, role } } shape so existing API routes and
+ * server components (requireAdmin(), session?.user?.id, etc.) work
+ * unchanged after the Supabase Auth migration.
+ */
+export async function auth(): Promise<AuthSession> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) return null
+
+  const profile = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { name: true, role: true },
+  })
+
+  return {
+    user: {
+      id: user.id,
+      email: user.email ?? "",
+      name: profile?.name ?? (user.user_metadata?.name as string | undefined) ?? null,
+      role: profile?.role ?? "CUSTOMER",
+    },
+  }
+}
