@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { getCustomerRisk } from "@/lib/customerRisk"
 
 export async function POST(req: Request) {
   try {
@@ -8,6 +9,22 @@ export async function POST(req: Request) {
 
     if (!items?.length || !address || !paymentMethod) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    }
+
+    // Determine if a COD deposit is required: either store-wide policy, or
+    // this phone number has a poor delivery track record on our own orders.
+    let depositAmount = 0
+    if (paymentMethod === "COD") {
+      const [depositSetting, amountSetting, risk] = await Promise.all([
+        prisma.setting.findUnique({ where: { key: "cod_deposit_enabled" } }),
+        prisma.setting.findUnique({ where: { key: "cod_deposit_amount" } }),
+        getCustomerRisk(address.phone),
+      ])
+      const globallyEnabled = depositSetting?.value === "true"
+      const isHighRisk = risk.riskLevel === "HIGH"
+      if (globallyEnabled || isHighRisk) {
+        depositAmount = Math.min(Number(amountSetting?.value || 100), total)
+      }
     }
 
     // Re-validate prices and stock from DB — never trust client-sent prices
@@ -60,6 +77,7 @@ export async function POST(req: Request) {
           status: "PENDING",
           paymentStatus: "UNPAID",
           paymentMethod,
+          depositAmount,
           total,
           subtotal: serverSubtotal,
           shippingCharge: shippingCharge ?? 0,
@@ -85,7 +103,7 @@ export async function POST(req: Request) {
       })
     })
 
-    return NextResponse.json({ orderId: order.id })
+    return NextResponse.json({ orderId: order.id, depositAmount })
   } catch (error: any) {
     console.error("Checkout error", error)
     const isStockError = error.message?.includes("stock") || error.message?.includes("available")

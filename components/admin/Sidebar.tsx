@@ -13,13 +13,15 @@ import {
   Gift,
   Truck,
   BarChart,
-  Settings
+  Settings,
+  PlusCircle
 } from "lucide-react"
 
 const sidebarLinks = [
   { href: "/admin", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/admin/products", icon: ShoppingBag, label: "Products" },
   { href: "/admin/orders", icon: ShoppingCart, label: "Orders" },
+  { href: "/admin/orders/new", icon: PlusCircle, label: "New Order" },
   { href: "/admin/customers", icon: Users, label: "Customers" },
   { href: "/admin/inventory", icon: Package, label: "Inventory" },
   { href: "/admin/coupons", icon: Ticket, label: "Coupons" },

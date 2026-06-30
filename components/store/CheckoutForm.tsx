@@ -23,14 +23,25 @@ export default function CheckoutForm() {
 
   // Step 2 data
   const [paymentMethod, setPaymentMethod] = useState("COD")
+  const [depositInfo, setDepositInfo] = useState<{ required: boolean; amount: number } | null>(null)
 
   const subtotal = items.reduce((acc, item) => acc + (item.price * item.quantity), 0)
   const shippingCharge = subtotal >= 1000 ? 0 : 100
   const total = subtotal + shippingCharge
 
-  const handleSubmitStep1 = (e: React.FormEvent) => {
+  const handleSubmitStep1 = async (e: React.FormEvent) => {
     e.preventDefault()
     setStep(2)
+    try {
+      const res = await fetch("/api/store/deposit-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: address.phone, total }),
+      })
+      if (res.ok) setDepositInfo(await res.json())
+    } catch {
+      // non-critical — deposit will still be enforced server-side at order creation
+    }
   }
 
   const handleSubmitStep2 = (e: React.FormEvent) => {
@@ -54,10 +65,23 @@ export default function CheckoutForm() {
         })
       });
       const orderData = await orderRes.json();
-      
+
       if (!orderRes.ok) throw new Error(orderData.error);
-      
-      if (paymentMethod === "BKASH") {
+
+      if (paymentMethod === "COD" && orderData.depositAmount > 0) {
+        // A deposit was required (store policy or this customer's delivery history) —
+        // collect it via bKash before treating the order as confirmed.
+        const bkashRes = await fetch('/api/payments/bkash/create', {
+           method: "POST",
+           headers: { "Content-Type": "application/json" },
+           body: JSON.stringify({ orderId: orderData.orderId, type: "deposit" })
+        });
+        const bkashData = await bkashRes.json();
+        if (!bkashRes.ok) throw new Error(bkashData.error);
+
+        clearCart();
+        window.location.href = bkashData.bkashURL;
+      } else if (paymentMethod === "BKASH") {
         const bkashRes = await fetch('/api/payments/bkash/create', {
            method: "POST",
            headers: { "Content-Type": "application/json" },
@@ -206,9 +230,15 @@ export default function CheckoutForm() {
                   <div className="ml-4">
                     <span className="font-bold block text-sm">Cash on Delivery</span>
                     <span className="text-xs text-drip-text-muted">Pay in cash when your order arrives</span>
+                    {paymentMethod === 'COD' && depositInfo?.required && (
+                      <p className="text-xs text-drip-gold font-medium mt-1.5">
+                        A ৳{depositInfo.amount} advance payment via bKash is required to confirm this order.
+                        The remaining ৳{(total - depositInfo.amount).toLocaleString()} is paid on delivery.
+                      </p>
+                    )}
                   </div>
                 </label>
-                
+
                 <label className={`flex items-center p-4 border rounded-xl cursor-pointer transition-all duration-300 ${paymentMethod === 'BKASH' ? 'border-drip-black bg-drip-muted/20 shadow-sm' : 'border-drip-border hover:border-drip-black/30'}`}>
                   <input type="radio" name="payment" value="BKASH" checked={paymentMethod === 'BKASH'} onChange={() => setPaymentMethod('BKASH')} className="w-4 h-4 accent-drip-black" />
                   <div className="ml-4 flex items-center gap-2">

@@ -201,6 +201,18 @@ export default async function OrderConfirmationPage({
                   <span className="font-mono">{order.payment.transactionId}</span>
                 </div>
               )}
+              {order.depositPaid && (
+                <div className="mt-3 p-3 bg-drip-gold/10 rounded-lg text-xs space-y-1">
+                  <div className="flex justify-between font-medium">
+                    <span>Advance paid (bKash)</span>
+                    <span className="font-mono">৳{Number(order.depositAmount).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-drip-text-muted">
+                    <span>Due on delivery</span>
+                    <span className="font-mono">৳{(Number(order.total) - Number(order.depositAmount)).toLocaleString()}</span>
+                  </div>
+                </div>
+              )}
             </div>
           </section>
 
@@ -244,7 +256,10 @@ export default async function OrderConfirmationPage({
         </div>
       </div>
       
-      <div className="mt-16 text-center border-t border-drip-border pt-12">
+      <div className="mt-16 text-center border-t border-drip-border pt-12 flex items-center justify-center gap-8">
+        <Link href={`/order/${order.id}/invoice`} className="inline-block text-xs font-bold uppercase tracking-widest border-b border-drip-black pb-1 hover:text-drip-gold hover:border-drip-gold transition-colors">
+          Download Invoice
+        </Link>
         <Link href="/shop" className="inline-block text-xs font-bold uppercase tracking-widest border-b border-drip-black pb-1 hover:text-drip-gold hover:border-drip-gold transition-colors">
           Continue Shopping &rarr;
         </Link>

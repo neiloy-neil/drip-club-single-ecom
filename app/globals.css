@@ -9,6 +9,13 @@
   }
 }
 
+@media print {
+  nav,
+  footer {
+    display: none !important;
+  }
+}
+
 @layer base {
   .theme {
     --font-heading: var(--font-sans);

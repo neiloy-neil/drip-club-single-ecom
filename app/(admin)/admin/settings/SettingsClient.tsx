@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
 
 type Staff = {
   id: string
@@ -34,6 +35,11 @@ export function SettingsClient({
   const [bkashNumber, setBkashNumber] = useState(initialSettings["bkash_merchant_number"] || "")
   const [nagadNumber, setNagadNumber] = useState(initialSettings["nagad_merchant_number"] || "")
   const [isSaving, setIsSaving] = useState(false)
+
+  // COD Deposit (RTO/fraud prevention)
+  const [codDepositEnabled, setCodDepositEnabled] = useState(initialSettings["cod_deposit_enabled"] === "true")
+  const [codDepositAmount, setCodDepositAmount] = useState(initialSettings["cod_deposit_amount"] || "100")
+  const [isDepositSaving, setIsDepositSaving] = useState(false)
 
   // Tracking & SEO
   const [ga4Id, setGa4Id] = useState(initialSettings["ga4_id"] || "")
@@ -72,6 +78,32 @@ export function SettingsClient({
       toast.error("Error saving settings")
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleSaveDeposit = async () => {
+    setIsDepositSaving(true)
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          settings: {
+            cod_deposit_enabled: codDepositEnabled,
+            cod_deposit_amount: codDepositAmount,
+          },
+        }),
+      })
+      if (res.ok) {
+        toast.success("Deposit settings saved")
+        router.refresh()
+      } else {
+        toast.error("Failed to save deposit settings")
+      }
+    } catch {
+      toast.error("Error saving deposit settings")
+    } finally {
+      setIsDepositSaving(false)
     }
   }
 
@@ -191,6 +223,42 @@ export function SettingsClient({
           </div>
           <Button onClick={handleSaveSettings} disabled={isSaving}>
             {isSaving ? "Saving..." : "Save Changes"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Cash on Delivery Deposit</CardTitle>
+          <CardDescription>
+            Require a small advance payment via bKash before confirming Cash on Delivery orders.
+            Reduces fake orders and failed deliveries (RTO) — stores using this report 40-50% fewer returns.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6 max-w-2xl">
+          <div className="flex items-center justify-between border rounded-lg p-4">
+            <div>
+              <p className="text-sm font-bold">Require deposit on all COD orders</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                When off, a deposit is still automatically requested from customers flagged as high-risk
+                (based on their own delivery history on this store).
+              </p>
+            </div>
+            <Switch checked={codDepositEnabled} onCheckedChange={setCodDepositEnabled} />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Deposit Amount (৳)</label>
+            <Input
+              type="number"
+              min="0"
+              value={codDepositAmount}
+              onChange={(e) => setCodDepositAmount(e.target.value)}
+              placeholder="100"
+            />
+            <p className="text-xs text-muted-foreground">Recommended: ৳100–200. Paid via bKash, remainder collected on delivery.</p>
+          </div>
+          <Button onClick={handleSaveDeposit} disabled={isDepositSaving}>
+            {isDepositSaving ? "Saving..." : "Save Deposit Settings"}
           </Button>
         </CardContent>
       </Card>

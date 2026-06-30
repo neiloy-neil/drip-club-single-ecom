@@ -4,11 +4,24 @@ import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Printer } from "lucide-react"
+import { Printer, AlertTriangle, ShieldCheck } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import type { CustomerRisk } from "@/lib/customerRisk"
 
-export default function OrderDetailsClient({ initialOrder }: { initialOrder: any }) {
+const RISK_BADGE_CLASS: Record<string, string> = {
+  LOW: "bg-green-100 text-green-800 border-green-200",
+  MEDIUM: "bg-yellow-100 text-yellow-800 border-yellow-200",
+  HIGH: "bg-red-100 text-red-800 border-red-200",
+}
+
+export default function OrderDetailsClient({
+  initialOrder,
+  customerRisk,
+}: {
+  initialOrder: any
+  customerRisk?: CustomerRisk | null
+}) {
   const router = useRouter()
   const [order, setOrder] = useState(initialOrder)
   const [loading, setLoading] = useState(false)
@@ -80,9 +93,11 @@ export default function OrderDetailsClient({ initialOrder }: { initialOrder: any
           <h1 className="text-3xl font-bold tracking-tight">Order {order.orderNumber}</h1>
           <p className="text-muted-foreground">Placed on {new Date(order.createdAt).toLocaleString()}</p>
         </div>
-        <Button variant="outline" className="gap-2" onClick={() => window.print()}>
-          <Printer className="h-4 w-4" /> Print Invoice
-        </Button>
+        <a href={`/order/${order.id}/invoice`} target="_blank" rel="noopener noreferrer">
+          <Button variant="outline" className="gap-2">
+            <Printer className="h-4 w-4" /> View / Print Invoice
+          </Button>
+        </a>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -109,6 +124,18 @@ export default function OrderDetailsClient({ initialOrder }: { initialOrder: any
                 <div className="flex justify-between"><span className="text-muted-foreground">Shipping:</span> <span>৳{order.shippingCharge.toString()}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Discount:</span> <span>-৳{order.discount.toString()}</span></div>
                 <div className="flex justify-between font-bold text-lg"><span>Total:</span> <span>৳{order.total.toString()}</span></div>
+                {Number(order.depositAmount) > 0 && (
+                  <div className={`flex justify-between text-sm ${order.depositPaid ? "text-green-700" : "text-orange-700"}`}>
+                    <span>{order.depositPaid ? "Advance paid (bKash)" : "Advance payment pending"}:</span>
+                    <span>৳{order.depositAmount.toString()}</span>
+                  </div>
+                )}
+                {order.depositPaid && (
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>Due on delivery (cash):</span>
+                    <span>৳{(Number(order.total) - Number(order.depositAmount)).toLocaleString()}</span>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -171,6 +198,30 @@ export default function OrderDetailsClient({ initialOrder }: { initialOrder: any
                   <strong>Note: </strong> {order.note}
                 </div>
               )}
+              {customerRisk && customerRisk.riskLevel !== "NEW" && (
+                <div className={`mt-4 p-3 rounded-md border text-xs space-y-1 ${RISK_BADGE_CLASS[customerRisk.riskLevel]}`}>
+                  <div className="flex items-center gap-2 font-bold">
+                    {customerRisk.riskLevel === "HIGH" ? (
+                      <AlertTriangle className="h-4 w-4" />
+                    ) : (
+                      <ShieldCheck className="h-4 w-4" />
+                    )}
+                    {customerRisk.riskLevel} risk customer
+                  </div>
+                  <p>
+                    {customerRisk.delivered} delivered / {customerRisk.returnedOrCancelled} returned or cancelled
+                    {" "}({Math.round((customerRisk.successRate ?? 0) * 100)}% success rate, {customerRisk.totalOrders} total orders)
+                  </p>
+                  {customerRisk.riskLevel === "HIGH" && (
+                    <p className="font-medium">Consider requiring an advance payment before confirming.</p>
+                  )}
+                </div>
+              )}
+              {customerRisk && customerRisk.riskLevel === "NEW" && customerRisk.totalOrders <= 1 && (
+                <div className="mt-4 p-3 rounded-md border bg-muted text-xs text-muted-foreground">
+                  First order from this phone number — no delivery history yet.
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -208,6 +259,7 @@ export default function OrderDetailsClient({ initialOrder }: { initialOrder: any
                   className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value="UNPAID">Unpaid</option>
+                  <option value="PARTIAL">Partial (deposit only)</option>
                   <option value="PAID">Paid</option>
                   <option value="REFUNDED">Refunded</option>
                 </select>

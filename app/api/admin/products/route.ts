@@ -12,7 +12,7 @@ export async function GET(req: Request) {
 
     const products = await prisma.product.findMany({
       where: {
-        name: { contains: search },
+        name: { contains: search, mode: "insensitive" },
         ...(categoryId ? { categoryId } : {}),
       },
       include: {

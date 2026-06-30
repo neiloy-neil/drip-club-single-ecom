@@ -183,6 +183,8 @@ model Order {
   total           Decimal       
   couponId        String?
   note            String?       // customer note
+  depositAmount   Decimal       @default(0) // advance payment required to confirm a COD order
+  depositPaid     Boolean       @default(false)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -253,6 +255,7 @@ enum PaymentMethod {
 
 enum PaymentStatus {
   UNPAID
+  PARTIAL  // deposit paid, remainder due on delivery (COD)
   PAID
   REFUNDED
 }

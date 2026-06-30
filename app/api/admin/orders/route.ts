@@ -18,8 +18,8 @@ export async function GET(req: Request) {
       ...(search
         ? {
             OR: [
-              { orderNumber: { contains: search } },
-              { shippingName: { contains: search } },
+              { orderNumber: { contains: search, mode: "insensitive" } },
+              { shippingName: { contains: search, mode: "insensitive" } },
             ],
           }
         : {}),

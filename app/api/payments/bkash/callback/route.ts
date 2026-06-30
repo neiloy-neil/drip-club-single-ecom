@@ -30,7 +30,10 @@ export async function GET(req: Request) {
 
     // Success! Update DB.
     const trxID = bkashData.trxID
-    
+
+    const existingPayment = await prisma.payment.findUnique({ where: { orderId } })
+    const isDeposit = (existingPayment?.gatewayResponse as any)?.isDeposit === true
+
     await prisma.payment.update({
       where: { orderId: orderId },
       data: {
@@ -43,21 +46,30 @@ export async function GET(req: Request) {
 
     const order = await prisma.order.update({
       where: { id: orderId },
-      data: {
-        paymentStatus: "PAID",
-        status: "CONFIRMED", // Auto-confirm paid orders
-      }
+      data: isDeposit
+        ? {
+            depositPaid: true,
+            paymentStatus: "PARTIAL", // remainder still due via COD
+            status: "CONFIRMED",
+          }
+        : {
+            paymentStatus: "PAID",
+            status: "CONFIRMED", // Auto-confirm paid orders
+          },
     })
 
     await prisma.orderStatusLog.create({
       data: {
         orderId: orderId,
         status: "CONFIRMED",
-        note: `Payment successful. bKash TrxID: ${trxID}`,
+        note: isDeposit
+          ? `Advance payment received. bKash TrxID: ${trxID}`
+          : `Payment successful. bKash TrxID: ${trxID}`,
       }
     })
 
-    if (order.userId) {
+    // Loyalty points are earned on full payment only — a deposit isn't the final sale value.
+    if (!isDeposit && order.userId) {
       try {
         await awardPoints(order.userId, orderId, Number(order.total))
       } catch (err) {

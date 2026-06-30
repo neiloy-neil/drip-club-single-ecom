@@ -4,7 +4,7 @@ import { createPayment } from "@/lib/bkash"
 
 export async function POST(req: Request) {
   try {
-    const { orderId } = await req.json()
+    const { orderId, type } = await req.json()
 
     if (!orderId) {
       return NextResponse.json({ error: "orderId is required" }, { status: 400 })
@@ -18,13 +18,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 })
     }
 
-    if (order.paymentStatus !== "UNPAID") {
+    const isDeposit = type === "deposit"
+
+    if (isDeposit) {
+      if (Number(order.depositAmount) <= 0) {
+        return NextResponse.json({ error: "No deposit required for this order" }, { status: 400 })
+      }
+      if (order.depositPaid) {
+        return NextResponse.json({ error: "Deposit already paid" }, { status: 400 })
+      }
+    } else if (order.paymentStatus !== "UNPAID") {
       return NextResponse.json({ error: "Order is already paid or processing" }, { status: 400 })
     }
 
     // Amount needs to be converted if Decimal
-    const amount = Number(order.total)
-    
+    const amount = isDeposit ? Number(order.depositAmount) : Number(order.total)
+
     // Call bKash Create API
     const { bkashURL, paymentID } = await createPayment(amount, orderId)
 
@@ -35,11 +44,12 @@ export async function POST(req: Request) {
         orderId,
         method: "BKASH",
         status: "UNPAID",
-        amount: order.total,
-        gatewayResponse: { paymentID }
+        amount,
+        gatewayResponse: { paymentID, isDeposit }
       },
       update: {
-        gatewayResponse: { paymentID },
+        amount,
+        gatewayResponse: { paymentID, isDeposit },
         status: "UNPAID",
       }
     })

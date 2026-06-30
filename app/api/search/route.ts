@@ -10,10 +10,10 @@ export async function GET(req: NextRequest) {
       where: {
         isActive: true,
         OR: [
-          { name: { contains: q } },
-          { description: { contains: q } },
-          { tags: { contains: q } },
-          { category: { name: { contains: q } } },
+          { name: { contains: q, mode: "insensitive" } },
+          { description: { contains: q, mode: "insensitive" } },
+          { tags: { contains: q, mode: "insensitive" } },
+          { category: { name: { contains: q, mode: "insensitive" } } },
         ],
       },
       include: { images: { take: 1, orderBy: { sortOrder: "asc" } }, category: true },
