@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { PlusCircle, Edit } from "lucide-react"
+import { PlusCircle, Edit, Download, Upload } from "lucide-react"
 import Link from "next/link"
 import prisma from "@/lib/prisma"
 import ProductsFilters from "./ProductsFilters"
@@ -41,11 +41,17 @@ export default async function ProductsPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Products</h1>
-        <Link href="/admin/products/new">
-          <Button className="gap-2">
-            <PlusCircle className="h-4 w-4" /> Add Product
-          </Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/admin/products/import">
+            <Button variant="outline" className="gap-2"><Upload className="h-4 w-4" /> Import CSV</Button>
+          </Link>
+          <a href="/api/admin/products/export">
+            <Button variant="outline" className="gap-2"><Download className="h-4 w-4" /> Export CSV</Button>
+          </a>
+          <Link href="/admin/products/new">
+            <Button className="gap-2"><PlusCircle className="h-4 w-4" /> Add Product</Button>
+          </Link>
+        </div>
       </div>
 
       <Card>

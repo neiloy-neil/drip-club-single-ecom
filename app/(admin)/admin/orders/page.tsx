@@ -1,14 +1,9 @@
 import { Card, CardContent } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Eye } from "lucide-react"
-import Link from "next/link"
 import prisma from "@/lib/prisma"
 import OrdersFilters from "./OrdersFilters"
+import OrdersBulkClient from "./OrdersBulkClient"
 import AdminPagination from "@/components/admin/AdminPagination"
 import { getCustomerRiskBatch } from "@/lib/customerRisk"
-import { AlertTriangle } from "lucide-react"
 
 const PAGE_SIZE = 20
 
@@ -65,7 +60,8 @@ export default async function OrdersPage({
   ])
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
-  const riskByPhone = await getCustomerRiskBatch(orders.map((o: any) => o.shippingPhone)).catch(() => new Map())
+  const riskMap = await getCustomerRiskBatch(orders.map((o: any) => o.shippingPhone)).catch(() => new Map())
+  const riskByPhone = Object.fromEntries(riskMap)
 
   return (
     <div className="space-y-6">
@@ -83,71 +79,7 @@ export default async function OrdersPage({
             currentStatus={status}
             currentPayment={paymentMethod}
           />
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Order No</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Total</TableHead>
-                <TableHead>Payment</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Customer Risk</TableHead>
-                <TableHead className="text-right">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {orders.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
-                    No orders found.
-                  </TableCell>
-                </TableRow>
-              )}
-              {orders.map((order: any) => {
-                const risk = riskByPhone.get(order.shippingPhone)
-                return (
-                <TableRow key={order.id}>
-                  <TableCell className="font-medium font-mono text-xs">{order.orderNumber}</TableCell>
-                  <TableCell>{order.user?.name || order.shippingName}</TableCell>
-                  <TableCell>{new Date(order.createdAt).toLocaleDateString("en-BD")}</TableCell>
-                  <TableCell className="font-mono">৳{Number(order.total).toLocaleString()}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-1 text-xs">
-                      <span className="font-medium">{order.paymentMethod}</span>
-                      <Badge variant="outline" className="w-fit text-[10px]">{order.paymentStatus}</Badge>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="outline"
-                      className={STATUS_COLORS[order.status] || "bg-gray-100 text-gray-800"}
-                    >
-                      {order.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {risk && risk.riskLevel !== "NEW" ? (
-                      <Badge variant="outline" className={`gap-1 text-[10px] ${RISK_COLORS[risk.riskLevel]}`}>
-                        {risk.riskLevel === "HIGH" && <AlertTriangle className="h-3 w-3" />}
-                        {risk.riskLevel} · {Math.round((risk.successRate ?? 0) * 100)}%
-                      </Badge>
-                    ) : (
-                      <span className="text-[10px] text-muted-foreground">New customer</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Link href={`/admin/orders/${order.id}`}>
-                      <Button variant="ghost" size="icon">
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </Link>
-                  </TableCell>
-                </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
+          <OrdersBulkClient orders={orders as any} riskByPhone={riskByPhone} />
           <AdminPagination page={page} totalPages={totalPages} basePath="/admin/orders" />
         </CardContent>
       </Card>
