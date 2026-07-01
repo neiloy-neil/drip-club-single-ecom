@@ -34,6 +34,7 @@ type Customer = {
   totalOrders: number
   totalSpent: number
   orders: Order[]
+  lastOrderAt?: string
 }
 
 export function CustomerClient({ data }: { data: Customer[] }) {
@@ -70,7 +71,7 @@ export function CustomerClient({ data }: { data: Customer[] }) {
               <TableHead>Email</TableHead>
               <TableHead>Phone</TableHead>
               <TableHead>Role</TableHead>
-              <TableHead>Joined</TableHead>
+              <TableHead>Joined / First Order</TableHead>
               <TableHead className="text-right">Orders</TableHead>
               <TableHead className="text-right">Total Spent</TableHead>
             </TableRow>
@@ -93,7 +94,12 @@ export function CustomerClient({ data }: { data: Customer[] }) {
                   <TableCell>{customer.email}</TableCell>
                   <TableCell>{customer.phone}</TableCell>
                   <TableCell>
-                    <Badge variant={customer.role === "ADMIN" ? "destructive" : customer.role === "STAFF" ? "default" : "secondary"}>
+                    <Badge variant={
+                      customer.role === "ADMIN" ? "destructive" :
+                      customer.role === "STAFF" ? "default" :
+                      customer.role === "GUEST" ? "outline" :
+                      "secondary"
+                    }>
                       {customer.role}
                     </Badge>
                   </TableCell>

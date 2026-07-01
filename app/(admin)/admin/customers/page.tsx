@@ -4,54 +4,117 @@ import { CustomerClient } from "./CustomerClient"
 export default async function CustomersPage({
   searchParams,
 }: {
-  searchParams: { search?: string }
+  searchParams: Promise<{ search?: string }>
 }) {
-  const search = searchParams.search || ""
+  const { search = "" } = await searchParams
 
+  const searchWhere = search
+    ? {
+        OR: [
+          { name: { contains: search, mode: "insensitive" as const } },
+          { email: { contains: search, mode: "insensitive" as const } },
+        ],
+      }
+    : {}
+
+  // Registered users
   const users = await prisma.user.findMany({
-    where: {
-      OR: [
-        { name: { contains: search } },
-        { email: { contains: search } },
-      ],
-    },
+    where: searchWhere,
     include: {
-      orders: {
-        orderBy: { createdAt: 'desc' }
-      },
+      orders: { orderBy: { createdAt: "desc" } },
     },
     orderBy: { createdAt: "desc" },
   })
 
-  // Calculate total spent per user
-  const customers = users.map((user) => {
+  // Guest orders (no user account) — group by guestEmail
+  const guestOrders = await prisma.order.findMany({
+    where: {
+      userId: null,
+      guestEmail: { not: null },
+      ...(search
+        ? {
+            OR: [
+              { shippingName: { contains: search, mode: "insensitive" } },
+              { guestEmail: { contains: search, mode: "insensitive" } },
+              { shippingPhone: { contains: search } },
+            ],
+          }
+        : {}),
+    },
+    orderBy: { createdAt: "desc" },
+  })
+
+  // Group guest orders by email
+  const guestMap = new Map<string, typeof guestOrders>()
+  for (const o of guestOrders) {
+    const key = o.guestEmail!
+    if (!guestMap.has(key)) guestMap.set(key, [])
+    guestMap.get(key)!.push(o)
+  }
+
+  const registeredCustomers = users.map((user) => {
     const totalSpent = user.orders
       .filter((o) => o.paymentStatus === "PAID" || o.status === "DELIVERED")
-      .reduce((sum, order) => sum + Number(order.total), 0)
-
+      .reduce((sum, o) => sum + Number(o.total), 0)
     return {
       id: user.id,
-      name: user.name || "N/A",
+      name: user.name || "—",
       email: user.email,
-      phone: user.phone || "N/A",
+      phone: user.phone || "—",
       role: user.role,
       joinedDate: user.createdAt.toISOString(),
       totalOrders: user.orders.length,
       totalSpent,
-      orders: user.orders.map(o => ({
+      lastOrderAt: user.orders[0]?.createdAt.toISOString() ?? user.createdAt.toISOString(),
+      orders: user.orders.map((o) => ({
         id: o.id,
         orderNumber: o.orderNumber,
         status: o.status,
         total: Number(o.total),
         createdAt: o.createdAt.toISOString(),
-      }))
+      })),
     }
   })
 
+  const guestCustomers = Array.from(guestMap.entries()).map(([email, orders]) => {
+    const latest = orders[0]
+    const totalSpent = orders
+      .filter((o) => o.paymentStatus === "PAID" || o.status === "DELIVERED")
+      .reduce((sum, o) => sum + Number(o.total), 0)
+    return {
+      id: `guest:${email}`,
+      name: latest.shippingName || "Guest",
+      email,
+      phone: latest.shippingPhone || "—",
+      role: "GUEST",
+      joinedDate: latest.createdAt.toISOString(),
+      totalOrders: orders.length,
+      totalSpent,
+      lastOrderAt: latest.createdAt.toISOString(),
+      orders: orders.map((o) => ({
+        id: o.id,
+        orderNumber: o.orderNumber,
+        status: o.status,
+        total: Number(o.total),
+        createdAt: o.createdAt.toISOString(),
+      })),
+    }
+  })
+
+  // Merge and sort by most recent activity
+  const customers = [...registeredCustomers, ...guestCustomers].sort(
+    (a, b) => new Date(b.lastOrderAt).getTime() - new Date(a.lastOrderAt).getTime()
+  )
+
   return (
     <div className="flex-1 space-y-4 p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">Customers</h2>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Customers</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            {registeredCustomers.length} registered · {guestCustomers.length} guests
+          </p>
+        </div>
       </div>
       <CustomerClient data={customers} />
     </div>
