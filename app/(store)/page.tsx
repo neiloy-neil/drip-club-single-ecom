@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma";
 import Link from "next/link";
+import Image from "next/image";
 import ProductCard from "@/components/store/ProductCard";
 import { Truck, CreditCard, RefreshCw, Star } from "lucide-react";
 import { serialize } from "@/lib/utils";
@@ -24,7 +25,7 @@ export default async function StoreHomepage() {
       {/* SECTION 1: Hero Banner */}
       <section className="relative w-full h-[90vh] min-h-[500px] flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0">
-          <img src={heroBanner.image} alt="Hero" className="w-full h-full object-cover" />
+          <Image src={heroBanner.image} alt="Hero" fill sizes="100vw" className="object-cover" priority />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
         </div>
         <div className="relative z-10 text-center space-y-6 max-w-3xl px-4 mt-20">
@@ -56,7 +57,7 @@ export default async function StoreHomepage() {
             {categories.map((cat: any) => (
               <Link key={cat.id} href={`/shop?categoryId=${cat.id}`} className="min-w-[200px] md:min-w-0 group relative block aspect-square rounded-xl overflow-hidden snap-center">
                 {cat.image ? (
-                  <img src={cat.image} alt={cat.name} className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500 ease-out" />
+                  <Image src={cat.image} alt={cat.name} fill sizes="(max-width: 768px) 200px, 20vw" className="object-cover group-hover:scale-105 transition-transform duration-500 ease-out" />
                 ) : (
                   <div className="w-full h-full bg-drip-muted flex items-center justify-center text-3xl font-heading text-drip-text/20 group-hover:scale-105 transition-transform duration-500 ease-out">
                     {cat.name.charAt(0)}
@@ -101,7 +102,7 @@ export default async function StoreHomepage() {
       <section className="w-full bg-[#F5F3EE] overflow-hidden my-16">
         <div className="flex flex-col md:flex-row h-full">
           <div className="w-full md:w-1/2 h-[400px] md:h-[600px] relative">
-             <img src="https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=2070&auto=format&fit=crop" alt="Summer Collection" className="w-full h-full object-cover" />
+             <Image src="https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=2070&auto=format&fit=crop" alt="Summer Collection" fill sizes="(max-width: 768px) 100vw, 50vw" className="object-cover" />
           </div>
           <div className="w-full md:w-1/2 flex items-center justify-center p-12 lg:p-24 text-center md:text-left">
             <div className="max-w-md space-y-6">

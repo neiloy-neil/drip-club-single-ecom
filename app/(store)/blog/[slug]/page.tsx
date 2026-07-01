@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma"
 import { notFound } from "next/navigation"
+import Image from "next/image"
 import ProductCard from "@/components/store/ProductCard"
 import { serialize } from "@/lib/utils"
 import type { Metadata } from "next"
@@ -38,8 +39,8 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       {post.coverImage && (
-        <div className="w-full aspect-[21/9] overflow-hidden">
-          <img src={post.coverImage} alt={post.title} className="w-full h-full object-cover" />
+        <div className="relative w-full aspect-[21/9] overflow-hidden">
+          <Image src={post.coverImage} alt={post.title} fill sizes="100vw" className="object-cover" />
         </div>
       )}
 

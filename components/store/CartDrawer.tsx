@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { ShoppingBag, Minus, Plus, Trash2, Tag, ChevronRight } from "lucide-react"
 import { useCartStore } from "@/store/useCartStore"
 import Link from "next/link"
+import Image from "next/image"
 import { useState } from "react"
 import { Switch } from "@/components/ui/switch"
 
@@ -72,8 +73,8 @@ export default function CartDrawer({ itemCount: propItemCount, freeShippingThres
             <div className="space-y-6">
               {items.map((item) => (
                 <div key={item.variantId} className="flex gap-4">
-                  <Link href={`/shop/${item.productSlug}`} className="h-32 w-24 shrink-0 overflow-hidden bg-drip-muted rounded-sm block">
-                    <img src={item.image || "/placeholder.jpg"} alt={item.name} className="w-full h-full object-cover" />
+                  <Link href={`/shop/${item.productSlug}`} className="relative h-32 w-24 shrink-0 overflow-hidden bg-drip-muted rounded-sm block">
+                    <Image src={item.image || "/placeholder.jpg"} alt={item.name} fill sizes="96px" className="object-cover" />
                   </Link>
                   <div className="flex-1 flex flex-col justify-between py-1">
                     <div>

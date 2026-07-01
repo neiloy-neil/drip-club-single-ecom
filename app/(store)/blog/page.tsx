@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma"
 import Link from "next/link"
+import Image from "next/image"
 import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Blog", description: "Style tips, lookbooks and news" }
@@ -27,7 +28,7 @@ export default async function BlogPage() {
               <article className="bg-white rounded-2xl overflow-hidden border border-drip-border hover:shadow-lg transition-all duration-300">
                 {post.coverImage && (
                   <div className="aspect-[16/9] overflow-hidden">
-                    <img src={post.coverImage} alt={post.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    <Image src={post.coverImage} alt={post.title} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover group-hover:scale-105 transition-transform duration-500" />
                   </div>
                 )}
                 <div className="p-5">

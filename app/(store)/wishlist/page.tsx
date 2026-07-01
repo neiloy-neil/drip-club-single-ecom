@@ -4,6 +4,7 @@ import { useWishlistStore } from "@/store/useWishlistStore"
 import { useCartStore } from "@/store/useCartStore"
 import { Heart, ShoppingBag, Trash2, ArrowRight } from "lucide-react"
 import Link from "next/link"
+import Image from "next/image"
 import { toast } from "sonner"
 
 export default function WishlistPage() {
@@ -52,7 +53,7 @@ export default function WishlistPage() {
             <div key={item.id} className="group flex flex-col gap-3">
               <div className="relative aspect-[3/4] bg-drip-muted rounded-xl overflow-hidden">
                 <Link href={`/shop/${item.slug}`}>
-                  <img src={item.image} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  <Image src={item.image} alt={item.name} fill sizes="(max-width: 768px) 50vw, 25vw" className="object-cover group-hover:scale-105 transition-transform duration-500" />
                 </Link>
                 <button
                   onClick={() => { removeItem(item.id); toast.success("Removed from wishlist") }}

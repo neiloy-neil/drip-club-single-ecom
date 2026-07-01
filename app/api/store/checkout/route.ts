@@ -6,7 +6,7 @@ import { resolveShippingCharge } from "@/lib/shippingZone"
 import { logAudit } from "@/lib/auditLog"
 import { refreshCustomerSegments } from "@/lib/customerSegments"
 import { cookies } from "next/headers"
-import { sendOrderConfirmation } from "@/lib/email"
+import { sendOrderConfirmation, sendAdminNewOrder } from "@/lib/email"
 import { mailchimpAddTags } from "@/lib/mailchimp"
 import { klaviyoOrderPlaced } from "@/lib/klaviyo"
 
@@ -292,6 +292,30 @@ export async function POST(req: Request) {
         giftMessage: giftMessage || null,
       }).catch(() => {})
     }
+
+    // Send admin new-order notification (fire-and-forget)
+    sendAdminNewOrder({
+      orderNumber: order.orderNumber,
+      customerName: address.name,
+      customerEmail: isGuest ? (guestEmail || "") : (toEmail || ""),
+      customerPhone: address.phone,
+      items: items.map((item: any) => ({
+        productName: item.name,
+        size: item.size || "Default",
+        color: item.color || "Default",
+        quantity: item.quantity,
+        price: Number(variantMap[item.variantId].product.price),
+      })),
+      subtotal: serverSubtotal,
+      shippingCharge: serverShippingCharge,
+      discount: autoDiscountAmount + serverCouponDiscount,
+      total: serverTotal,
+      paymentMethod,
+      shippingAddress: address.fullAddress,
+      shippingArea: address.area,
+      shippingDistrict: address.district,
+      shippingDivision: address.division,
+    }).catch(() => {})
 
     // Wire Klaviyo + Mailchimp (fire-and-forget)
     if (toEmail) {

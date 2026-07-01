@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Image from "next/image"
 import { useSession, signOut } from "@/hooks/useSession"
 import { useRouter } from "next/navigation"
 import { User, Package, MapPin, Gift, LogOut, Wallet, Link2 } from "lucide-react"
@@ -191,9 +192,9 @@ export default function AccountPage() {
                     </div>
                     {order.items?.slice(0, 1).map((item: any) => (
                       <div key={item.id} className="p-6 flex gap-4">
-                        <div className="w-20 h-24 bg-drip-muted rounded-md shrink-0 overflow-hidden">
+                        <div className="relative w-20 h-24 bg-drip-muted rounded-md shrink-0 overflow-hidden">
                           {item.product?.images?.[0]?.url && (
-                            <img src={item.product.images[0].url} alt={item.productName} className="w-full h-full object-cover" />
+                            <Image src={item.product.images[0].url} alt={item.productName} fill sizes="80px" className="object-cover" />
                           )}
                         </div>
                         <div>

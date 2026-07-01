@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Image from "next/image"
 import { ChevronLeft, ChevronRight, ZoomIn } from "lucide-react"
 
 export default function ProductGallery({ images }: { images: any[] }) {
@@ -16,10 +17,13 @@ export default function ProductGallery({ images }: { images: any[] }) {
       {/* Main Image */}
       <div className="w-full flex-1 relative bg-drip-muted overflow-hidden group">
         <div className="aspect-[3/4] md:aspect-[4/5] w-full">
-          <img 
-            src={activeImage} 
-            alt="Product Image" 
-            className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105 cursor-zoom-in" 
+          <Image
+            src={activeImage}
+            alt="Product Image"
+            fill
+            sizes="(max-width: 768px) 100vw, 50vw"
+            className="object-cover transition-transform duration-700 ease-out group-hover:scale-105 cursor-zoom-in"
+            priority
           />
         </div>
 
@@ -46,9 +50,9 @@ export default function ProductGallery({ images }: { images: any[] }) {
           <button 
             key={img.id} 
             onClick={() => setActiveIndex(idx)}
-            className={`relative aspect-[3/4] w-20 md:w-full overflow-hidden transition-all snap-center rounded-sm ${activeIndex === idx ? 'ring-1 ring-drip-black ring-offset-2 opacity-100' : 'opacity-60 hover:opacity-100'}`}
+            className={`relative aspect-[3/4] w-20 md:w-full overflow-hidden transition-all snap-center rounded-sm ${activeIndex === idx ? "ring-1 ring-drip-black ring-offset-2 opacity-100" : "opacity-60 hover:opacity-100"}`}
           >
-            <img src={img.url} alt={img.alt || "Thumbnail"} className="w-full h-full object-cover" />
+            <Image src={img.url} alt={img.alt || "Thumbnail"} fill sizes="96px" className="object-cover" />
           </button>
         ))}
         {images.length === 0 && (

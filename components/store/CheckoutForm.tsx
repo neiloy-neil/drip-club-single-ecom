@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Image from "next/image"
 import { useCartStore } from "@/store/useCartStore"
 import { useRouter } from "next/navigation"
 import { MapPin, CreditCard, ClipboardCheck, ChevronRight, Check, Gift, MessageSquare, User, Star, Wallet, Tag, Calendar } from "lucide-react"
@@ -604,8 +605,8 @@ export default function CheckoutForm({
           <div className="space-y-4 mb-6 max-h-[300px] overflow-y-auto pr-2">
             {items.map((item) => (
               <div key={item.variantId} className="flex gap-4">
-                <div className="h-20 w-16 bg-drip-muted shrink-0 rounded overflow-hidden">
-                  <img src={item.image || "/placeholder.jpg"} alt={item.name} className="w-full h-full object-cover" />
+                <div className="relative h-20 w-16 bg-drip-muted shrink-0 rounded overflow-hidden">
+                  <Image src={item.image || "/placeholder.jpg"} alt={item.name} fill sizes="64px" className="object-cover" />
                 </div>
                 <div className="flex-1 text-sm flex flex-col justify-center">
                   <h4 className="font-medium line-clamp-1">{item.name}</h4>

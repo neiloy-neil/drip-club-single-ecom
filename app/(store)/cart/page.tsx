@@ -3,6 +3,7 @@
 import { useCartStore } from "@/store/useCartStore"
 import { Trash2, Minus, Plus, ShoppingBag, ShieldCheck, ArrowRight, Truck } from "lucide-react"
 import Link from "next/link"
+import Image from "next/image"
 import { useState, useEffect } from "react"
 import { Switch } from "@/components/ui/switch"
 import { toast } from "sonner"
@@ -110,8 +111,8 @@ export default function CartPage() {
         <div className="lg:w-2/3 space-y-8">
           {items.map((item) => (
             <div key={item.variantId} className="flex gap-6 border-b border-drip-border pb-8">
-              <Link href={`/shop/${item.productSlug}`} className="w-32 md:w-40 aspect-[3/4] shrink-0 bg-drip-muted rounded-md overflow-hidden block">
-                <img src={item.image || "/placeholder.jpg"} alt={item.name} className="w-full h-full object-cover" />
+              <Link href={`/shop/${item.productSlug}`} className="relative w-32 md:w-40 aspect-[3/4] shrink-0 bg-drip-muted rounded-md overflow-hidden block">
+                <Image src={item.image || "/placeholder.jpg"} alt={item.name} fill sizes="160px" className="object-cover" />
               </Link>
               
               <div className="flex-1 flex flex-col justify-between py-2">

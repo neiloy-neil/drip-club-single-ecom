@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma"
 import { notFound } from "next/navigation"
+import Image from "next/image"
 import BundleAddToCart from "./BundleAddToCart"
 import type { Metadata } from "next"
 
@@ -51,8 +52,8 @@ export default async function BundlePage({ params }: { params: Promise<{ slug: s
                   <div key={item.id} className="flex gap-4 bg-white rounded-xl p-4 border border-drip-border">
                     {idx > 0 && <div className="self-center text-xl font-bold text-drip-text-muted shrink-0">+</div>}
                     {image && (
-                      <div className="w-20 h-20 rounded-lg overflow-hidden shrink-0">
-                        <img src={image} alt={item.product.name} className="w-full h-full object-cover" />
+                      <div className="relative w-20 h-20 rounded-lg overflow-hidden shrink-0">
+                        <Image src={image} alt={item.product.name} fill sizes="80px" className="object-cover" />
                       </div>
                     )}
                     <div className="flex-1">
@@ -70,8 +71,8 @@ export default async function BundlePage({ params }: { params: Promise<{ slug: s
           <div className="w-full lg:w-80">
             <div className="bg-white rounded-2xl border border-drip-border p-6 sticky top-24 space-y-4">
               {bundle.image && (
-                <div className="rounded-xl overflow-hidden aspect-square mb-4">
-                  <img src={bundle.image} alt={bundle.name} className="w-full h-full object-cover" />
+                <div className="relative rounded-xl overflow-hidden aspect-square mb-4">
+                  <Image src={bundle.image} alt={bundle.name} fill sizes="320px" className="object-cover" />
                 </div>
               )}
               <div>

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Image from "next/image"
 import { Search, ShoppingBag, Check, Package, Truck, Home, Ban } from "lucide-react"
 import { toast } from "sonner"
 
@@ -147,8 +148,8 @@ export default function TrackOrderPage() {
             <div className="space-y-4">
               {order.items.map((item: any, i: number) => (
                 <div key={i} className="flex gap-4">
-                  <div className="h-16 w-12 bg-drip-muted shrink-0 rounded overflow-hidden">
-                    {item.image && <img src={item.image} alt={item.productName} className="w-full h-full object-cover" />}
+                  <div className="relative h-16 w-12 bg-drip-muted shrink-0 rounded overflow-hidden">
+                    {item.image && <Image src={item.image} alt={item.productName} fill sizes="48px" className="object-cover" />}
                   </div>
                   <div className="flex-1 text-sm">
                     <p className="font-medium">{item.productName}</p>

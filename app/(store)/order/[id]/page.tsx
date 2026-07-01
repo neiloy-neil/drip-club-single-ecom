@@ -2,6 +2,7 @@ import prisma from "@/lib/prisma"
 import { redirect } from "next/navigation"
 import { Check, X, ShoppingBag, MapPin, CreditCard, Gift, Package, Truck, Home, Ban } from "lucide-react"
 import Link from "next/link"
+import Image from "next/image"
 import { getBalance } from "@/lib/loyalty"
 
 const STATUS_STEPS = ["PENDING", "CONFIRMED", "PACKED", "SHIPPED", "DELIVERED"] as const
@@ -139,8 +140,8 @@ export default async function OrderConfirmationPage({
             <div className="space-y-6 mb-8 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
               {order.items.map((item) => (
                 <div key={item.id} className="flex gap-4">
-                  <div className="h-20 w-16 bg-drip-muted shrink-0 rounded overflow-hidden">
-                    <img src={item.product.images[0]?.url || "/placeholder.jpg"} alt={item.productName} className="w-full h-full object-cover" />
+                  <div className="relative h-20 w-16 bg-drip-muted shrink-0 rounded overflow-hidden">
+                    <Image src={item.product.images[0]?.url || "/placeholder.jpg"} alt={item.productName} fill sizes="64px" className="object-cover" />
                   </div>
                   <div className="flex-1 text-sm flex flex-col justify-center">
                     <h4 className="font-medium line-clamp-1">{item.productName}</h4>

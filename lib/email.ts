@@ -342,6 +342,66 @@ export async function sendGiftCardEmail(data: {
   await sendMail(data.to, `${data.senderName} sent you a ৳${data.amount.toLocaleString()} ${store.name} gift card`, baseTemplate(store, content))
 }
 
+export async function sendAdminNewOrder(data: {
+  orderNumber: string
+  customerName: string
+  customerEmail: string
+  customerPhone: string
+  items: { productName: string; size: string; color: string; quantity: number; price: number }[]
+  subtotal: number
+  shippingCharge: number
+  discount: number
+  total: number
+  paymentMethod: string
+  shippingAddress: string
+  shippingArea: string
+  shippingDistrict: string
+  shippingDivision: string
+}) {
+  const store = await getStoreMeta()
+  const rows = await prisma.setting.findMany({ where: { key: { in: ["admin_notification_email", "support_email"] } } })
+  const s = Object.fromEntries(rows.map((r) => [r.key, r.value]))
+  const adminEmail = s.admin_notification_email || s.support_email
+  if (!adminEmail) return
+
+  const itemRows = data.items.map((i) => `
+    <div class="item-row">
+      <div>
+        <div style="font-weight:500">${i.productName}</div>
+        <div class="muted">${i.size} / ${i.color} &nbsp;×${i.quantity}</div>
+      </div>
+      <div style="font-weight:500;white-space:nowrap">৳${(i.price * i.quantity).toLocaleString()}</div>
+    </div>`).join("")
+
+  const content = `
+    <h1 style="font-size:22px;font-weight:700;margin-bottom:6px">New order received</h1>
+    <p class="muted">A new order just landed in your store.</p>
+    <hr class="divider">
+    <div class="grid-2">
+      <div><div class="label">Order number</div><div class="value">${data.orderNumber}</div></div>
+      <div><div class="label">Payment</div><div class="value">${data.paymentMethod}</div></div>
+    </div>
+    <div class="grid-2" style="margin-top:0">
+      <div><div class="label">Customer</div><div class="value">${data.customerName}</div></div>
+      <div><div class="label">Phone</div><div class="value">${data.customerPhone}</div></div>
+    </div>
+    ${data.customerEmail ? `<p class="muted" style="margin-top:4px">${data.customerEmail}</p>` : ""}
+    <h3 style="font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#888;margin:20px 0 12px">Items</h3>
+    ${itemRows}
+    <div style="margin-top:16px">
+      <div class="total-row"><span>Subtotal</span><span>৳${data.subtotal.toLocaleString()}</span></div>
+      ${data.shippingCharge > 0 ? `<div class="total-row"><span>Shipping</span><span>৳${data.shippingCharge.toLocaleString()}</span></div>` : `<div class="total-row"><span>Shipping</span><span style="color:#3b6d11">Free</span></div>`}
+      ${data.discount > 0 ? `<div class="total-row"><span>Discount</span><span style="color:#3b6d11">−৳${data.discount.toLocaleString()}</span></div>` : ""}
+      <div class="total-final"><span>Total</span><span>৳${data.total.toLocaleString()}</span></div>
+    </div>
+    <hr class="divider">
+    <h3 style="font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:8px">Ship to</h3>
+    <p class="muted">${data.shippingAddress}, ${data.shippingArea}, ${data.shippingDistrict}, ${data.shippingDivision}</p>
+    <a href="${store.url}/admin/orders" class="btn">View in admin →</a>`
+
+  await sendMail(adminEmail, `New order — ${data.orderNumber} (৳${data.total.toLocaleString()})`, baseTemplate(store, content))
+}
+
 export async function sendWelcomeEmail(data: { to: string; name: string }) {
   const store = await getStoreMeta()
   const content = `

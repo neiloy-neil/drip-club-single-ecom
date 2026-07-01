@@ -53,9 +53,9 @@ export default function ComparePage() {
                     >
                       <X className="w-3 h-3" />
                     </button>
-                    <div className="aspect-square w-24 mx-auto bg-gray-100 rounded-lg overflow-hidden mb-2">
+                    <div className="relative aspect-square w-24 mx-auto bg-gray-100 rounded-lg overflow-hidden mb-2">
                       {item.image ? (
-                        <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                        <Image src={item.image} alt={item.name} fill sizes="96px" className="object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">No image</div>
                       )}

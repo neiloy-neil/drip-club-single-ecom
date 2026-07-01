@@ -80,6 +80,7 @@ export function SettingsClient({
   const [smtpPass, setSmtpPass] = useState(initialSettings["smtp_pass"] || "")
   const [smtpFromName, setSmtpFromName] = useState(initialSettings["smtp_from_name"] || "")
   const [smtpFromEmail, setSmtpFromEmail] = useState(initialSettings["smtp_from_email"] || "")
+  const [adminNotificationEmail, setAdminNotificationEmail] = useState(initialSettings["admin_notification_email"] || "")
   const [testEmailTo, setTestEmailTo] = useState("")
   const [isSmtpSaving, setIsSmtpSaving] = useState(false)
   const [isSendingTest, setIsSendingTest] = useState(false)
@@ -156,6 +157,7 @@ export function SettingsClient({
         smtp_host: smtpHost, smtp_port: smtpPort, smtp_secure: smtpSecure,
         smtp_user: smtpUser, smtp_pass: smtpPass,
         smtp_from_name: smtpFromName, smtp_from_email: smtpFromEmail,
+        admin_notification_email: adminNotificationEmail,
       })
       ok ? toast.success("SMTP settings saved") : toast.error("Failed to save")
     } catch { toast.error("Error saving") } finally { setIsSmtpSaving(false) }
@@ -421,6 +423,9 @@ export function SettingsClient({
                   <Field label="From Name"><Input value={smtpFromName} onChange={(e) => setSmtpFromName(e.target.value)} placeholder="DRIP" /></Field>
                   <Field label="From Email"><Input type="email" value={smtpFromEmail} onChange={(e) => setSmtpFromEmail(e.target.value)} placeholder="noreply@store.com" /></Field>
                 </div>
+                <Field label="Admin Notification Email" hint="Receives an email every time a new order is placed. Falls back to Support Email if empty.">
+                  <Input type="email" value={adminNotificationEmail} onChange={(e) => setAdminNotificationEmail(e.target.value)} placeholder="orders@store.com" />
+                </Field>
               </CardContent>
             </Card>
             <Button onClick={handleSaveSmtp} disabled={isSmtpSaving}>{isSmtpSaving ? "Saving…" : "Save SMTP Settings"}</Button>
