@@ -2,10 +2,11 @@ import prisma from "@/lib/prisma"
 import ProductCard from "@/components/store/ProductCard"
 import { serialize } from "@/lib/utils"
 import Link from "next/link"
-import { Grid3X3, List as ListIcon } from "lucide-react"
+import Image from "next/image"
 
 import { getActiveFlashSaleBatch, applyFlashSaleDiscount } from "@/lib/flashSale"
 import ShopFilters from "@/components/store/ShopFilters"
+import ShopTopControls from "@/components/store/ShopTopControls"
 
 export default async function ShopPage({
   searchParams,
@@ -21,6 +22,7 @@ export default async function ShopPage({
     minPrice?: string
     maxPrice?: string
     search?: string
+    view?: string
   }>
 }) {
   const params = await searchParams
@@ -33,6 +35,7 @@ export default async function ShopPage({
   const minPrice = params.minPrice || ""
   const maxPrice = params.maxPrice || ""
   const search = params.search || ""
+  const view = params.view || "grid"
   const take = parseInt(params.take || "12")
 
   let orderBy: any = { createdAt: "desc" }
@@ -79,7 +82,7 @@ export default async function ShopPage({
     products.map((p: any) => ({ id: p.id, categoryId: p.categoryId }))
   ).catch(() => new Map())
 
-  const current = { categoryId, brandId, size, color, sort, minPrice, maxPrice, sale: params.sale || "", search }
+  const current = { categoryId, brandId, size, color, sort, view, minPrice, maxPrice, sale: params.sale || "", search, take: params.take || "12" }
 
   return (
     <div className="container mx-auto px-4 py-8 md:py-12 animate-in fade-in duration-500">
@@ -94,37 +97,7 @@ export default async function ShopPage({
           </p>
         </div>
 
-        <div className="flex items-center justify-between md:justify-end gap-4 w-full md:w-auto">
-          <form className="flex items-center gap-2">
-            <select
-              name="sort"
-              defaultValue={sort}
-              className="border-none bg-drip-muted text-drip-text text-sm px-4 py-2 rounded-full focus:ring-1 focus:ring-drip-gold outline-none cursor-pointer"
-              onChange={(e) => {
-                // handled by form submit on change via hidden button below
-              }}
-            >
-              <option value="newest">Newest</option>
-              <option value="price-asc">Price: Low to High</option>
-              <option value="price-desc">Price: High to Low</option>
-            </select>
-            {categoryId && <input type="hidden" name="categoryId" value={categoryId} />}
-            {brandId && <input type="hidden" name="brandId" value={brandId} />}
-            {size && <input type="hidden" name="size" value={size} />}
-            {color && <input type="hidden" name="color" value={color} />}
-            {minPrice && <input type="hidden" name="minPrice" value={minPrice} />}
-            {maxPrice && <input type="hidden" name="maxPrice" value={maxPrice} />}
-          </form>
-
-          <div className="hidden md:flex items-center gap-1 bg-drip-muted p-1 rounded-full text-drip-text-muted">
-            <button className="p-1.5 bg-white rounded-full shadow-sm text-drip-black">
-              <Grid3X3 className="w-4 h-4" />
-            </button>
-            <button className="p-1.5 hover:text-drip-black transition-colors">
-              <ListIcon className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        <ShopTopControls current={current} />
       </div>
 
       <div className="flex flex-col lg:flex-row gap-10">
@@ -149,28 +122,64 @@ export default async function ShopPage({
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-10 md:gap-x-8 md:gap-y-12">
-                {serialize(products).map((product: any) => {
-                  const sale = flashSaleMap.get(product.id)
-                  const flashSalePrice = sale
-                    ? applyFlashSaleDiscount(Number(product.price), sale)
-                    : undefined
-                  return (
-                    <ProductCard
-                      key={product.id}
-                      product={product}
-                      flashSalePrice={flashSalePrice}
-                      flashSaleLabel={
-                        sale
-                          ? sale.discountType === "PERCENTAGE"
-                            ? `${sale.discountValue}% off`
-                            : `৳${sale.discountValue} off`
-                          : undefined
-                      }
-                    />
-                  )
-                })}
-              </div>
+              {view === "list" ? (
+                <div className="flex flex-col gap-4">
+                  {serialize(products).map((product: any) => {
+                    const sale = flashSaleMap.get(product.id)
+                    const flashSalePrice = sale ? applyFlashSaleDiscount(Number(product.price), sale) : undefined
+                    const img = product.images?.[0]?.url || "/placeholder.jpg"
+                    const displayPrice = flashSalePrice ?? Number(product.price)
+                    return (
+                      <Link key={product.id} href={`/shop/${product.slug}`} className="flex gap-5 border border-drip-border rounded-2xl p-4 hover:border-drip-gold transition-colors group bg-white">
+                        <div className="relative w-28 h-36 shrink-0 rounded-xl overflow-hidden bg-drip-muted">
+                          <Image src={img} alt={product.name} fill sizes="112px" className="object-cover group-hover:scale-105 transition-transform duration-500" />
+                        </div>
+                        <div className="flex flex-col justify-between py-1 flex-1">
+                          <div>
+                            <p className="text-xs text-drip-text-muted uppercase tracking-widest mb-1">{product.category?.name}</p>
+                            <h3 className="font-heading font-bold text-drip-black text-lg leading-tight line-clamp-2">{product.name}</h3>
+                            {product.description && (
+                              <p className="text-sm text-drip-text-muted mt-2 line-clamp-2">{product.description}</p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3 mt-3">
+                            <span className="font-bold text-drip-black">৳{displayPrice.toLocaleString()}</span>
+                            {product.comparePrice && Number(product.comparePrice) > displayPrice && (
+                              <span className="text-sm text-drip-text-muted line-through">৳{Number(product.comparePrice).toLocaleString()}</span>
+                            )}
+                            {sale && (
+                              <span className="text-xs bg-red-100 text-red-600 font-semibold px-2 py-0.5 rounded-full">
+                                {sale.discountType === "PERCENTAGE" ? `${sale.discountValue}% off` : `৳${sale.discountValue} off`}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-10 md:gap-x-8 md:gap-y-12">
+                  {serialize(products).map((product: any) => {
+                    const sale = flashSaleMap.get(product.id)
+                    const flashSalePrice = sale ? applyFlashSaleDiscount(Number(product.price), sale) : undefined
+                    return (
+                      <ProductCard
+                        key={product.id}
+                        product={product}
+                        flashSalePrice={flashSalePrice}
+                        flashSaleLabel={
+                          sale
+                            ? sale.discountType === "PERCENTAGE"
+                              ? `${sale.discountValue}% off`
+                              : `৳${sale.discountValue} off`
+                            : undefined
+                        }
+                      />
+                    )
+                  })}
+                </div>
+              )}
 
               {hasMore && (
                 <div className="mt-16 text-center border-t border-drip-border pt-8">
@@ -178,7 +187,7 @@ export default async function ShopPage({
                     Showing {products.length} of {totalProducts}
                   </p>
                   <Link
-                    href={`/shop?take=${take + 12}${categoryId ? `&categoryId=${categoryId}` : ""}${size ? `&size=${size}` : ""}${color ? `&color=${color}` : ""}${sort !== "newest" ? `&sort=${sort}` : ""}${minPrice ? `&minPrice=${minPrice}` : ""}${maxPrice ? `&maxPrice=${maxPrice}` : ""}`}
+                    href={`/shop?take=${take + 12}${categoryId ? `&categoryId=${categoryId}` : ""}${size ? `&size=${size}` : ""}${color ? `&color=${color}` : ""}${sort !== "newest" ? `&sort=${sort}` : ""}${minPrice ? `&minPrice=${minPrice}` : ""}${maxPrice ? `&maxPrice=${maxPrice}` : ""}${view !== "grid" ? `&view=${view}` : ""}`}
                     scroll={false}
                     className="inline-block px-12 py-3 bg-drip-surface border border-drip-border text-drip-black font-medium hover:border-drip-black rounded-full transition-colors"
                   >

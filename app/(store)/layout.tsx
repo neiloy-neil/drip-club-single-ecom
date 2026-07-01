@@ -1,5 +1,6 @@
 import Navbar from "@/components/store/Navbar";
 import Footer from "@/components/store/Footer";
+import WishlistSync from "@/components/store/WishlistSync";
 import prisma from "@/lib/prisma";
 import { getActiveFlashSaleBatch, applyFlashSaleDiscount } from "@/lib/flashSale";
 
@@ -64,6 +65,7 @@ export default async function StoreLayout({
           endsAt: sitewideSale.endsAt.toISOString(),
         } : null}
       />
+      <WishlistSync />
       <main className="flex-1">
         {children}
       </main>
