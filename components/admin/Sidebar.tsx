@@ -7,7 +7,8 @@ import {
   LayoutDashboard, ShoppingBag, ShoppingCart, Users, Package, Ticket, Gift, Truck,
   BarChart, Settings, PlusCircle, Building2, ClipboardList, Receipt, FileText,
   Zap, Percent, Tag, RotateCcw, Globe, Link2, MapPin, Layers, ScrollText,
-  ShoppingBasket, Upload, CreditCard, Workflow, Wallet
+  ShoppingBasket, Upload, CreditCard, Workflow, Wallet, Award, TrendingUp,
+  Sliders, ChevronRight, Crown
 } from "lucide-react"
 
 const sidebarLinks = [
@@ -17,27 +18,33 @@ const sidebarLinks = [
   { href: "/admin/products/import", icon: Upload, label: "Import CSV" },
   { href: "/admin/bundles", icon: Layers, label: "Bundles" },
   { href: "/admin/categories", icon: Tag, label: "Categories" },
+  { href: "/admin/brands", icon: Award, label: "Brands" },
   // Orders
   { href: "/admin/orders", icon: ShoppingCart, label: "Orders" },
   { href: "/admin/orders/new", icon: PlusCircle, label: "New Order" },
   { href: "/admin/returns", icon: RotateCcw, label: "Returns & RMA" },
   { href: "/admin/abandoned-carts", icon: ShoppingBasket, label: "Abandoned Carts" },
-  // Customers
+  // Customers & Memberships
   { href: "/admin/customers", icon: Users, label: "Customers" },
   { href: "/admin/store-credit", icon: Wallet, label: "Store Credit" },
+  { href: "/admin/memberships", icon: Crown, label: "Memberships" },
   // Inventory & Supply
   { href: "/admin/inventory", icon: Package, label: "Inventory" },
   { href: "/admin/suppliers", icon: Building2, label: "Suppliers" },
   { href: "/admin/purchase-orders", icon: ClipboardList, label: "Purchase Orders" },
   { href: "/admin/expenses", icon: Receipt, label: "Expenses" },
-  // Marketing & Promotions
+  // Pricing & Promotions
+  { href: "/admin/price-rules", icon: TrendingUp, label: "Price Rules" },
   { href: "/admin/flash-sales", icon: Zap, label: "Flash Sales" },
   { href: "/admin/auto-discounts", icon: Percent, label: "Auto Discounts" },
   { href: "/admin/coupons", icon: Ticket, label: "Coupons" },
   { href: "/admin/gift-cards", icon: CreditCard, label: "Gift Cards" },
+  { href: "/admin/order-bumps", icon: ChevronRight, label: "Order Bumps" },
   { href: "/admin/affiliates", icon: Link2, label: "Affiliates" },
   { href: "/admin/loyalty", icon: Gift, label: "Loyalty" },
   { href: "/admin/workflows", icon: Workflow, label: "Workflows" },
+  // Checkout & UX
+  { href: "/admin/checkout-fields", icon: Sliders, label: "Checkout Fields" },
   // Shipping
   { href: "/admin/shipping-zones", icon: MapPin, label: "Shipping Zones" },
   { href: "/admin/delivery", icon: Truck, label: "Delivery" },
