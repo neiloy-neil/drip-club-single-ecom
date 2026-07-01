@@ -3,6 +3,9 @@
 @import "tailwindcss";
 @config "../tailwind.config.ts";
 
+/* Dark mode only activates when .dark class is on <html> — never via OS preference */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;
