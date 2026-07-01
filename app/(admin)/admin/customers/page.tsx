@@ -26,11 +26,10 @@ export default async function CustomersPage({
     orderBy: { createdAt: "desc" },
   })
 
-  // Guest orders (no user account) — group by guestEmail
+  // Guest orders (no user account) — includes orders with AND without guestEmail
   const guestOrders = await prisma.order.findMany({
     where: {
       userId: null,
-      guestEmail: { not: null },
       ...(search
         ? {
             OR: [
@@ -44,10 +43,12 @@ export default async function CustomersPage({
     orderBy: { createdAt: "desc" },
   })
 
-  // Group guest orders by email
+  // Group by guestEmail when present, otherwise by "name|phone" fingerprint
   const guestMap = new Map<string, typeof guestOrders>()
   for (const o of guestOrders) {
-    const key = o.guestEmail!
+    const key = o.guestEmail
+      ? `email:${o.guestEmail}`
+      : `name:${(o.shippingName || "Guest").toLowerCase().trim()}|${(o.shippingPhone || "").trim()}`
     if (!guestMap.has(key)) guestMap.set(key, [])
     guestMap.get(key)!.push(o)
   }
@@ -76,15 +77,16 @@ export default async function CustomersPage({
     }
   })
 
-  const guestCustomers = Array.from(guestMap.entries()).map(([email, orders]) => {
+  const guestCustomers = Array.from(guestMap.entries()).map(([, orders]) => {
     const latest = orders[0]
     const totalSpent = orders
       .filter((o) => o.paymentStatus === "PAID" || o.status === "DELIVERED")
       .reduce((sum, o) => sum + Number(o.total), 0)
+    const email = latest.guestEmail ?? `guest-${latest.id}@no-email`
     return {
       id: `guest:${email}`,
       name: latest.shippingName || "Guest",
-      email,
+      email: latest.guestEmail ?? "—",
       phone: latest.shippingPhone || "—",
       role: "GUEST",
       joinedDate: latest.createdAt.toISOString(),
