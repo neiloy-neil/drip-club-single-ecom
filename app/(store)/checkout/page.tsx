@@ -4,7 +4,7 @@ import prisma from "@/lib/prisma"
 
 export default async function CheckoutPage() {
   const settings = await prisma.setting.findMany({
-    where: { key: { in: ["free_shipping_above", "shipping_charge", "enabled_payment_methods", "tax_enabled", "tax_rate", "tax_label"] } },
+    where: { key: { in: ["free_shipping_above", "shipping_charge", "enabled_payment_methods", "tax_enabled", "tax_rate", "tax_label", "gift_wrap_enabled", "gift_wrap_charge"] } },
   }).catch(() => [])
 
   const map = Object.fromEntries(settings.map((s) => [s.key, s.value]))
@@ -14,8 +14,10 @@ export default async function CheckoutPage() {
     ? map.enabled_payment_methods.split(",").map((s) => s.trim())
     : ["COD", "BKASH", "NAGAD"]
   const taxEnabled = map.tax_enabled === "true"
-  const taxRate = Number(map.tax_rate || 0) // percentage e.g. 5 = 5%
+  const taxRate = Number(map.tax_rate || 0)
   const taxLabel = map.tax_label || "VAT"
+  const giftWrapEnabled = map.gift_wrap_enabled === "true"
+  const giftWrapCharge = Number(map.gift_wrap_charge || 50)
 
   return (
     <div className="bg-drip-bg min-h-screen pt-8 pb-24 animate-in fade-in duration-500">
@@ -35,6 +37,8 @@ export default async function CheckoutPage() {
           taxEnabled={taxEnabled}
           taxRate={taxRate}
           taxLabel={taxLabel}
+          giftWrapEnabled={giftWrapEnabled}
+          giftWrapCharge={giftWrapCharge}
         />
       </div>
     </div>

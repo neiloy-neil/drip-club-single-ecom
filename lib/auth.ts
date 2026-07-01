@@ -16,6 +16,12 @@ export type AuthSession = {
  * server components (requireAdmin(), session?.user?.id, etc.) work
  * unchanged after the Supabase Auth migration.
  */
+export async function requireAdmin(): Promise<AuthSession> {
+  const session = await auth()
+  if (!session || session.user.role !== "ADMIN") return null
+  return session
+}
+
 export async function auth(): Promise<AuthSession> {
   const supabase = await createClient()
   const {

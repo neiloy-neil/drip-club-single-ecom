@@ -46,6 +46,16 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url))
   }
 
+  // Capture affiliate ref code — store in cookie for 30 days
+  const refCode = request.nextUrl.searchParams.get("ref")
+  if (refCode) {
+    response.cookies.set("drip_ref", refCode.toUpperCase(), {
+      maxAge: 30 * 24 * 60 * 60,
+      path: "/",
+      sameSite: "lax",
+    })
+  }
+
   return response
 }
 

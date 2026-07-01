@@ -6,6 +6,7 @@ import VariantSelector from "@/components/store/VariantSelector"
 import ProductCard from "@/components/store/ProductCard"
 import ReviewSection from "@/components/store/ReviewSection"
 import FlashSaleCountdown from "@/components/store/FlashSaleCountdown"
+import SocialProof from "@/components/store/SocialProof"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Truck, RefreshCw, ShieldCheck } from "lucide-react"
 import type { Metadata } from "next"
@@ -175,11 +176,15 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
               )}
             </div>
 
+            {/* Social proof */}
+            <SocialProof productId={product.id} />
+
             {/* Selectors */}
             <VariantSelector
               product={serialize(product)}
               attr1Label={attrConfig?.attr1Label || "Size"}
               attr2Label={attrConfig?.attr2Label || "Color"}
+              categoryId={product.categoryId}
             />
 
             {/* Accordions for extra info */}

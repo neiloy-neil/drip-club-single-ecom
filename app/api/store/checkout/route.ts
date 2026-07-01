@@ -2,11 +2,16 @@ import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { getCustomerRisk } from "@/lib/customerRisk"
 import { getBestAutoDiscount } from "@/lib/autoDiscount"
+import { resolveShippingCharge } from "@/lib/shippingZone"
+import { logAudit } from "@/lib/auditLog"
+import { refreshCustomerSegments } from "@/lib/customerSegments"
+import { cookies } from "next/headers"
 
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { items, address, paymentMethod, subtotal, shippingCharge, total, userId } = body
+    const { items, address, paymentMethod, subtotal, shippingCharge, total, userId,
+      note, giftWrap, giftMessage, giftWrapCharge, isGuest, guestEmail } = body
 
     if (!items?.length || !address || !paymentMethod) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
@@ -55,16 +60,19 @@ export async function POST(req: Request) {
       return sum + Number(variant.product.price) * item.quantity
     }, 0)
 
-    const [taxEnabledSetting, taxRateSetting, shippingChargeSetting] = await Promise.all([
+    const [taxEnabledSetting, taxRateSetting] = await Promise.all([
       prisma.setting.findUnique({ where: { key: "tax_enabled" } }),
       prisma.setting.findUnique({ where: { key: "tax_rate" } }),
-      prisma.setting.findUnique({ where: { key: "shipping_charge" } }),
     ])
 
-    const serverShippingCharge = Number(shippingChargeSetting?.value || shippingCharge || 60)
+    const serverShippingCharge = await resolveShippingCharge(address.district, serverSubtotal)
     const taxEnabled = taxEnabledSetting?.value === "true"
     const taxRate = Number(taxRateSetting?.value || 0)
     const serverTaxAmount = taxEnabled ? Math.round((serverSubtotal * taxRate) / 100) : 0
+
+    // Gift wrap — validate charge from DB setting
+    const giftWrapSetting = giftWrap ? await prisma.setting.findUnique({ where: { key: "gift_wrap_charge" } }) : null
+    const serverGiftWrapCharge = giftWrap ? Number(giftWrapSetting?.value || giftWrapCharge || 50) : 0
 
     // Auto discount (bulk/tiered) — server-side validation, never trust client
     const cartItems = items.map((item: any) => ({
@@ -76,7 +84,7 @@ export async function POST(req: Request) {
     const autoDiscount = await getBestAutoDiscount(cartItems, serverSubtotal).catch(() => null)
     const autoDiscountAmount = autoDiscount?.savingAmount || 0
 
-    const serverTotal = serverSubtotal + serverShippingCharge + serverTaxAmount - autoDiscountAmount
+    const serverTotal = serverSubtotal + serverShippingCharge + serverTaxAmount + serverGiftWrapCharge - autoDiscountAmount
 
     const order = await prisma.$transaction(async (tx) => {
       // Re-check stock inside transaction to prevent race conditions
@@ -98,6 +106,8 @@ export async function POST(req: Request) {
         data: {
           orderNumber,
           userId: userId || null,
+          isGuest: isGuest || false,
+          guestEmail: isGuest ? (guestEmail || null) : null,
           status: "PENDING",
           paymentStatus: "UNPAID",
           paymentMethod,
@@ -105,7 +115,11 @@ export async function POST(req: Request) {
           total: serverTotal,
           subtotal: serverSubtotal,
           shippingCharge: serverShippingCharge,
-          discount: Math.max(0, autoDiscountAmount), // auto discount (bulk/tiered) applied server-side
+          discount: Math.max(0, autoDiscountAmount),
+          note: note || null,
+          giftWrap: giftWrap || false,
+          giftMessage: giftWrap ? (giftMessage || null) : null,
+          giftWrapCharge: serverGiftWrapCharge,
           shippingName: address.name,
           shippingPhone: address.phone,
           shippingAddress: address.fullAddress,
@@ -126,6 +140,38 @@ export async function POST(req: Request) {
         },
       })
     })
+
+    await logAudit({ action: "order.created", entityType: "Order", entityId: order.id, after: { orderNumber: order.orderNumber, total: serverTotal, paymentMethod } })
+
+    // Refresh customer segments after new order (fire-and-forget)
+    if (userId) {
+      refreshCustomerSegments(userId).catch(() => {})
+    }
+
+    // Record affiliate conversion if referral cookie present
+    const cookieStore = await cookies()
+    const refCode = cookieStore.get("drip_ref")?.value
+    if (refCode) {
+      try {
+        const affiliate = await prisma.affiliate.findUnique({ where: { code: refCode, isActive: true } })
+        if (affiliate) {
+          const commission = affiliate.commissionType === "PERCENTAGE"
+            ? Math.round((serverTotal * Number(affiliate.commissionValue)) / 100)
+            : Number(affiliate.commissionValue)
+          await prisma.$transaction([
+            prisma.affiliateConversion.create({
+              data: { affiliateId: affiliate.id, orderId: order.id, orderTotal: serverTotal, commission },
+            }),
+            prisma.affiliate.update({
+              where: { id: affiliate.id },
+              data: { totalEarned: { increment: commission } },
+            }),
+          ])
+        }
+      } catch {
+        // non-critical
+      }
+    }
 
     return NextResponse.json({ orderId: order.id, depositAmount })
   } catch (error: any) {

@@ -4,15 +4,18 @@ import { useState, useMemo } from "react"
 import { toast } from "sonner"
 import { useCartStore } from "@/store/useCartStore"
 import NotifyMeForm from "@/components/store/NotifyMeForm"
+import SizeGuideModal from "@/components/store/SizeGuideModal"
 
 export default function VariantSelector({
   product,
   attr1Label = "Size",
   attr2Label = "Color",
+  categoryId,
 }: {
   product: any
   attr1Label?: string
   attr2Label?: string
+  categoryId?: string
 }) {
   const variants = product.variants || []
   const addItem = useCartStore((s) => s.addItem)
@@ -101,7 +104,7 @@ export default function VariantSelector({
         <div className="space-y-3">
           <div className="flex items-baseline justify-between">
             <h3 className="text-xs font-bold uppercase tracking-widest text-drip-black">{attr1Label}</h3>
-            <button className="text-xs text-drip-text-muted underline underline-offset-4 hover:text-drip-gold transition-colors">Size Guide</button>
+            {categoryId && <SizeGuideModal categoryId={categoryId} />}
           </div>
           <div className="grid grid-cols-4 sm:grid-cols-5 gap-3">
             {sizes.map(size => {

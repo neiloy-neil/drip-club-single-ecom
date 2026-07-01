@@ -1,0 +1,78 @@
+import prisma from "@/lib/prisma"
+import { notFound } from "next/navigation"
+import ProductCard from "@/components/store/ProductCard"
+import { serialize } from "@/lib/utils"
+import type { Metadata } from "next"
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params
+  const post = await prisma.blogPost.findUnique({ where: { slug, isPublished: true } }).catch(() => null)
+  if (!post) return { title: "Not Found" }
+  return { title: post.title, description: post.excerpt || "", openGraph: { images: post.coverImage ? [post.coverImage] : [] } }
+}
+
+export default async function BlogPostPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params
+  const post = await prisma.blogPost.findUnique({
+    where: { slug, isPublished: true },
+    include: {
+      category: true,
+      products: { include: { product: { include: { images: true, variants: true, category: true } } } },
+    },
+  }).catch(() => null)
+
+  if (!post) notFound()
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    headline: post.title,
+    description: post.excerpt || "",
+    author: { "@type": "Person", name: post.authorName },
+    datePublished: post.publishedAt?.toISOString(),
+    image: post.coverImage || undefined,
+  }
+
+  return (
+    <div className="bg-drip-bg min-h-screen">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+
+      {post.coverImage && (
+        <div className="w-full aspect-[21/9] overflow-hidden">
+          <img src={post.coverImage} alt={post.title} className="w-full h-full object-cover" />
+        </div>
+      )}
+
+      <div className="container mx-auto px-4 py-12 max-w-3xl">
+        <div className="mb-4 flex items-center gap-3 text-xs text-drip-text-muted">
+          <a href="/blog" className="hover:text-drip-gold transition-colors">Journal</a>
+          <span>/</span>
+          {post.category && <span className="text-drip-gold font-bold uppercase tracking-widest">{post.category.name}</span>}
+        </div>
+        <h1 className="text-4xl font-heading font-bold text-drip-black mb-4 leading-tight">{post.title}</h1>
+        <div className="flex items-center gap-4 text-sm text-drip-text-muted mb-10 pb-8 border-b border-drip-border">
+          <span>By {post.authorName}</span>
+          {post.publishedAt && <span>{new Date(post.publishedAt).toLocaleDateString("en-BD", { year: "numeric", month: "long", day: "numeric" })}</span>}
+          {post.tags && (
+            <div className="flex gap-2 flex-wrap">
+              {post.tags.split(",").map(t => (
+                <span key={t} className="px-2 py-0.5 bg-drip-muted text-drip-text-muted text-xs rounded">{t.trim()}</span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="prose prose-lg max-w-none text-drip-text" dangerouslySetInnerHTML={{ __html: post.content }} />
+
+        {post.products.length > 0 && (
+          <div className="mt-16 pt-8 border-t border-drip-border">
+            <h2 className="text-2xl font-heading font-bold mb-6">Featured Products</h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {serialize(post.products.map(bp => bp.product)).map((p: any) => <ProductCard key={p.id} product={p} />)}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
