@@ -12,7 +12,7 @@ type Addon = {
   isRequired: boolean
 }
 
-export default function ProductAddons({ addons, productId }: { addons: Addon[]; productId: string }) {
+export default function ProductAddons({ addons, productId }: { addons: any[]; productId: string }) {
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [selectValues, setSelectValues] = useState<Record<string, string>>({})
 
