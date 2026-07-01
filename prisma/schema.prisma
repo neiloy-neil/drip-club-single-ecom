@@ -22,11 +22,14 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  addresses     Address[]
-  orders        Order[]
-  loyaltyPoints LoyaltyPoint[]
-  reviews       Review[]
-  customerTags  CustomerTag[]
+  addresses         Address[]
+  orders            Order[]
+  loyaltyPoints     LoyaltyPoint[]
+  reviews           Review[]
+  customerTags      CustomerTag[]
+  wishlists         WishlistItem[]
+  storeCredits      StoreCredit[]
+  storeCreditTxns   StoreCreditTransaction[]
 
   @@map("users")
 }
@@ -130,6 +133,7 @@ model Product {
   digitalAssets  DigitalAsset[]
   bundleItems    BundleItem[]     // this product appears in these bundles
   blogPosts      BlogPostProduct[]
+  wishlists      WishlistItem[]
 
   @@map("products")
 }
@@ -629,6 +633,8 @@ model ShippingZone {
   sortOrder          Int      @default(0)
   createdAt          DateTime @default(now())
 
+  rates ShippingRate[]
+
   @@map("shipping_zones")
 }
 
@@ -806,15 +812,19 @@ model AbandonedCart {
   id          String   @id @default(cuid())
   sessionId   String   @unique
   email       String?
+  name        String?
   phone       String?
   items       Json     // snapshot of cart items
   subtotal    Decimal
   recoveredAt DateTime?
+  isRecovered Boolean  @default(false)
   orderId     String?
+  emailSent   Boolean  @default(false)
+  emailSentAt DateTime?
   email1SentAt DateTime?
   email2SentAt DateTime?
   email3SentAt DateTime?
-  couponCode  String?  // auto-generated coupon for email 3
+  couponCode  String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -974,4 +984,209 @@ model SizeGuide {
   category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@map("size_guides")
+}
+
+// ─────────────────────────────────────────────
+// WORKFLOW ENGINE (D4)
+// ─────────────────────────────────────────────
+
+enum WorkflowTrigger {
+  ORDER_PLACED
+  ORDER_STATUS_CHANGED
+  PAYMENT_RECEIVED
+  REVIEW_LEFT
+  CUSTOMER_REGISTERED
+  ABANDONED_CART
+  RETURN_APPROVED
+}
+
+enum WorkflowActionType {
+  SEND_EMAIL
+  ADD_TAG
+  REMOVE_TAG
+  APPLY_COUPON
+  NOTIFY_ADMIN
+  ADD_STORE_CREDIT
+}
+
+model Workflow {
+  id          String          @id @default(cuid())
+  name        String
+  description String?
+  trigger     WorkflowTrigger
+  conditions  Json            @default("[]") // [{field, operator, value}]
+  actions     Json            @default("[]") // [{type, config}]
+  isActive    Boolean         @default(true)
+  runCount    Int             @default(0)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  runs        WorkflowRun[]
+
+  @@map("workflows")
+}
+
+model WorkflowRun {
+  id         String   @id @default(cuid())
+  workflowId String
+  entityId   String   // orderId, userId, etc.
+  entityType String
+  status     String   @default("SUCCESS") // SUCCESS | FAILED | SKIPPED
+  log        String?
+  createdAt  DateTime @default(now())
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
+  @@index([entityId])
+  @@map("workflow_runs")
+}
+
+// ─────────────────────────────────────────────
+// SHIPPING TABLE RATES (D7)
+// ─────────────────────────────────────────────
+
+model ShippingRate {
+  id          String   @id @default(cuid())
+  zoneId      String
+  label       String   // "0–500g", "1–3 items"
+  minWeight   Decimal? // grams
+  maxWeight   Decimal? // grams
+  minQty      Int?
+  maxQty      Int?
+  rate        Decimal
+  createdAt   DateTime @default(now())
+
+  zone ShippingZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+
+  @@map("shipping_rates")
+}
+
+// ─────────────────────────────────────────────
+// DELIVERY SCHEDULE (D8)
+// ─────────────────────────────────────────────
+
+model DeliverySchedule {
+  id           String   @id @default(cuid())
+  district     String?  // null = global default
+  leadDays     Int      @default(2)    // min days before delivery
+  cutoffHour   Int      @default(14)   // orders after 2pm = +1 day
+  blackoutDates Json    @default("[]") // ["2025-12-25","2026-01-01"]
+  workingDays  Json     @default("[1,2,3,4,5,6]") // 0=Sun..6=Sat
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([district])
+  @@map("delivery_schedules")
+}
+
+// ─────────────────────────────────────────────
+// GIFT CARDS (D10)
+// ─────────────────────────────────────────────
+
+model GiftCard {
+  id            String    @id @default(cuid())
+  code          String    @unique
+  amount        Decimal
+  balance       Decimal
+  senderName    String?
+  senderEmail   String?
+  recipientEmail String
+  message       String?
+  isActive      Boolean   @default(true)
+  expiresAt     DateTime?
+  redeemedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  transactions GiftCardTransaction[]
+
+  @@map("gift_cards")
+}
+
+model GiftCardTransaction {
+  id         String   @id @default(cuid())
+  giftCardId String
+  orderId    String?
+  amount     Decimal
+  type       String   // REDEEM | REFUND
+  createdAt  DateTime @default(now())
+
+  giftCard GiftCard @relation(fields: [giftCardId], references: [id], onDelete: Cascade)
+
+  @@map("gift_card_transactions")
+}
+
+// ─────────────────────────────────────────────
+// STORE CREDIT (D11)
+// ─────────────────────────────────────────────
+
+model StoreCredit {
+  id        String   @id @default(cuid())
+  userId    String
+  balance   Decimal  @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user         User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions StoreCreditTransaction[]
+
+  @@unique([userId])
+  @@map("store_credits")
+}
+
+model StoreCreditTransaction {
+  id            String   @id @default(cuid())
+  userId        String
+  storeCreditId String?
+  amount        Decimal
+  type          String   // CREDIT | DEBIT
+  reason        String?
+  orderId       String?
+  issuedBy      String?  // admin userId
+  createdAt     DateTime @default(now())
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  storeCredit StoreCredit? @relation(fields: [storeCreditId], references: [id])
+
+  @@index([userId])
+  @@map("store_credit_transactions")
+}
+
+// ─────────────────────────────────────────────
+// WISHLIST (D/E7)
+// ─────────────────────────────────────────────
+
+model WishlistItem {
+  id        String   @id @default(cuid())
+  userId    String?
+  sessionId String?  // for guests
+  productId String
+  variantId String?
+  createdAt DateTime @default(now())
+
+  user    User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([sessionId])
+  @@map("wishlist_items")
+}
+
+// ─────────────────────────────────────────────
+// MAILCHIMP / KLAVIYO SYNC (D3)
+// ─────────────────────────────────────────────
+
+model MarketingSubscriber {
+  id         String   @id @default(cuid())
+  email      String   @unique
+  name       String?
+  provider   String   // "mailchimp" | "klaviyo"
+  listId     String?
+  status     String   @default("subscribed") // subscribed | unsubscribed
+  syncedAt   DateTime?
+  tags       Json     @default("[]")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("marketing_subscribers")
 }

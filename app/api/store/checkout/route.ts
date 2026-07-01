@@ -6,6 +6,7 @@ import { resolveShippingCharge } from "@/lib/shippingZone"
 import { logAudit } from "@/lib/auditLog"
 import { refreshCustomerSegments } from "@/lib/customerSegments"
 import { cookies } from "next/headers"
+import { sendOrderConfirmation } from "@/lib/email"
 
 export async function POST(req: Request) {
   try {
@@ -171,6 +172,38 @@ export async function POST(req: Request) {
       } catch {
         // non-critical
       }
+    }
+
+    // Send order confirmation email (fire-and-forget)
+    const toEmail = isGuest ? guestEmail : (await prisma.user.findUnique({ where: { id: userId || "" }, select: { email: true } }))?.email
+    if (toEmail) {
+      sendOrderConfirmation({
+        to: toEmail,
+        orderNumber: order.orderNumber,
+        customerName: address.name,
+        items: items.map((item: any) => ({
+          productName: item.name,
+          size: item.size || "Default",
+          color: item.color || "Default",
+          quantity: item.quantity,
+          price: Number(variantMap[item.variantId].product.price),
+        })),
+        subtotal: serverSubtotal,
+        shippingCharge: serverShippingCharge,
+        discount: autoDiscountAmount,
+        giftWrapCharge: serverGiftWrapCharge,
+        total: serverTotal,
+        paymentMethod,
+        shippingName: address.name,
+        shippingPhone: address.phone,
+        shippingAddress: address.fullAddress,
+        shippingArea: address.area,
+        shippingDistrict: address.district,
+        shippingDivision: address.division,
+        note: note || null,
+        giftWrap: giftWrap || false,
+        giftMessage: giftMessage || null,
+      }).catch(() => {})
     }
 
     return NextResponse.json({ orderId: order.id, depositAmount })

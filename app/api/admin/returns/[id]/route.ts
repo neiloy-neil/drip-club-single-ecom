@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { requireAdmin } from "@/lib/auth"
 import { logAudit } from "@/lib/auditLog"
+import { sendReturnUpdate } from "@/lib/email"
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await requireAdmin()
@@ -12,6 +13,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const updated = await prisma.returnRequest.update({
     where: { id },
     data: { status, adminNote: adminNote || null, refundAmount: refundAmount || null },
+    include: { order: { include: { user: { select: { email: true, name: true } } } } },
   })
 
   await logAudit({
@@ -23,6 +25,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     entityId: id,
     after: { status, adminNote, refundAmount },
   })
+
+  const toEmail = updated.order.user?.email || updated.order.guestEmail
+  if (toEmail) {
+    sendReturnUpdate({
+      to: toEmail,
+      customerName: updated.order.user?.name || updated.order.shippingName,
+      orderNumber: updated.order.orderNumber,
+      status,
+      refundAmount: refundAmount ? Number(refundAmount) : undefined,
+      adminNote: adminNote || null,
+    }).catch(() => {})
+  }
 
   return NextResponse.json(updated)
 }

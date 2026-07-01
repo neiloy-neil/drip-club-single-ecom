@@ -7,7 +7,7 @@ import {
   LayoutDashboard, ShoppingBag, ShoppingCart, Users, Package, Ticket, Gift, Truck,
   BarChart, Settings, PlusCircle, Building2, ClipboardList, Receipt, FileText,
   Zap, Percent, Tag, RotateCcw, Globe, Link2, MapPin, Layers, ScrollText,
-  ShoppingBasket, Upload, UserCog, LayoutList
+  ShoppingBasket, Upload, CreditCard, Workflow, Wallet
 } from "lucide-react"
 
 const sidebarLinks = [
@@ -24,17 +24,20 @@ const sidebarLinks = [
   { href: "/admin/abandoned-carts", icon: ShoppingBasket, label: "Abandoned Carts" },
   // Customers
   { href: "/admin/customers", icon: Users, label: "Customers" },
+  { href: "/admin/store-credit", icon: Wallet, label: "Store Credit" },
   // Inventory & Supply
   { href: "/admin/inventory", icon: Package, label: "Inventory" },
   { href: "/admin/suppliers", icon: Building2, label: "Suppliers" },
   { href: "/admin/purchase-orders", icon: ClipboardList, label: "Purchase Orders" },
   { href: "/admin/expenses", icon: Receipt, label: "Expenses" },
-  // Marketing
+  // Marketing & Promotions
   { href: "/admin/flash-sales", icon: Zap, label: "Flash Sales" },
   { href: "/admin/auto-discounts", icon: Percent, label: "Auto Discounts" },
   { href: "/admin/coupons", icon: Ticket, label: "Coupons" },
+  { href: "/admin/gift-cards", icon: CreditCard, label: "Gift Cards" },
   { href: "/admin/affiliates", icon: Link2, label: "Affiliates" },
   { href: "/admin/loyalty", icon: Gift, label: "Loyalty" },
+  { href: "/admin/workflows", icon: Workflow, label: "Workflows" },
   // Shipping
   { href: "/admin/shipping-zones", icon: MapPin, label: "Shipping Zones" },
   { href: "/admin/delivery", icon: Truck, label: "Delivery" },
