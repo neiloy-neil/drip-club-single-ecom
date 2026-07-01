@@ -8,7 +8,8 @@ import {
   BarChart, Settings, PlusCircle, Building2, ClipboardList, Receipt, FileText,
   Zap, Percent, Tag, RotateCcw, Globe, Link2, MapPin, Layers, ScrollText,
   ShoppingBasket, Upload, CreditCard, Workflow, Wallet, Award, TrendingUp,
-  Sliders, ChevronRight, Crown
+  Sliders, ChevronRight, Crown, Calendar, Warehouse, Download, LineChart, PieChart,
+  RefreshCw, QrCode
 } from "lucide-react"
 
 const sidebarLinks = [
@@ -51,8 +52,15 @@ const sidebarLinks = [
   // Content
   { href: "/admin/blog", icon: Globe, label: "Blog" },
   { href: "/admin/pages", icon: FileText, label: "Pages" },
-  // Analytics & Ops
+  // Bookings & Subscriptions
+  { href: "/admin/bookings", icon: Calendar, label: "Bookings" },
+  // Analytics & Reports
+  { href: "/admin/analytics/products", icon: LineChart, label: "Product Analytics" },
+  { href: "/admin/analytics/cohorts", icon: PieChart, label: "Cohort & LTV" },
   { href: "/admin/reports", icon: BarChart, label: "Reports" },
+  { href: "/admin/export", icon: Download, label: "Export Data" },
+  // Ops
+  { href: "/admin/locations", icon: Warehouse, label: "Locations" },
   { href: "/admin/audit-log", icon: ScrollText, label: "Audit Log" },
   { href: "/admin/settings", icon: Settings, label: "Settings" },
 ]

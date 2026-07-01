@@ -83,6 +83,7 @@ model Category {
   flashSales      FlashSale[]
   attributeConfig CategoryAttributeConfig?
   sizeGuide       SizeGuide?
+  couponRules     CouponRule[]
 
   @@map("categories")
 }
@@ -140,10 +141,11 @@ model Product {
   bundleItems    BundleItem[]
   blogPosts      BlogPostProduct[]
   wishlists      WishlistItem[]
-  addons         ProductAddon[]
-  orderBumps     OrderBump[]
-  reviewQAs      ReviewQA[]
-  priceRules     PriceRule[]
+  addons              ProductAddon[]
+  orderBumps          OrderBump[]
+  reviewQAs           ReviewQA[]
+  priceRules          PriceRule[]
+  subscriptionPlans   SubscriptionPlan[]
 
   @@map("products")
 }
@@ -178,6 +180,7 @@ model ProductVariant {
   cartItems          CartItem[]
   purchaseOrderItems PurchaseOrderItem[]
   stockAlerts        StockAlert[]
+  locationStock      LocationStock[]
 
   @@map("product_variants")
 }
@@ -391,6 +394,7 @@ model Coupon {
   createdAt     DateTime     @default(now())
 
   orders Order[]
+  rule   CouponRule?
 
   @@map("coupons")
 }
@@ -1412,4 +1416,193 @@ model MembershipSubscription {
 
   @@index([userId])
   @@map("membership_subscriptions")
+}
+
+// ─────────────────────────────────────────────
+// SUBSCRIPTIONS / RECURRING ORDERS (F1)
+// ─────────────────────────────────────────────
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+  EXPIRED
+}
+
+model SubscriptionPlan {
+  id            String   @id @default(cuid())
+  productId     String
+  name          String   // "Weekly Coffee Replenishment"
+  intervalDays  Int      @default(30)  // frequency in days
+  discountPct   Decimal  @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  product       Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  subscriptions Subscription[]
+
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id              String             @id @default(cuid())
+  userId          String
+  planId          String
+  variantId       String?
+  quantity        Int                @default(1)
+  status          SubscriptionStatus @default(ACTIVE)
+  nextOrderAt     DateTime
+  lastOrderId     String?
+  addressId       String?
+  paymentMethod   PaymentMethod      @default(COD)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  plan SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  @@index([userId])
+  @@index([nextOrderAt])
+  @@map("subscriptions")
+}
+
+// ─────────────────────────────────────────────
+// BOOKINGS / APPOINTMENTS (F2)
+// ─────────────────────────────────────────────
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+model BookingService {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  description  String?
+  price        Decimal
+  durationMins Int      @default(60)
+  maxSlots     Int      @default(1) // per time slot
+  isActive     Boolean  @default(true)
+  images       Json     @default("[]") // url array
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  bookings     Booking[]
+
+  @@map("booking_services")
+}
+
+model Booking {
+  id          String        @id @default(cuid())
+  serviceId   String
+  userId      String?
+  guestName   String?
+  guestEmail  String?
+  guestPhone  String?
+  bookingDate DateTime
+  status      BookingStatus @default(PENDING)
+  note        String?
+  adminNote   String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  service BookingService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([bookingDate])
+  @@index([userId])
+  @@map("bookings")
+}
+
+// ─────────────────────────────────────────────
+// PRODUCT VIEWS / ANALYTICS (F4)
+// ─────────────────────────────────────────────
+
+model ProductView {
+  id        String   @id @default(cuid())
+  productId String
+  sessionId String?
+  userId    String?
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+  @@index([createdAt])
+  @@map("product_views")
+}
+
+// ─────────────────────────────────────────────
+// ADVANCED COUPONS (F7) — extend existing Coupon
+// ─────────────────────────────────────────────
+// Extended fields are added via CouponRule which stores BOGO / category / stacking config
+
+model CouponRule {
+  id              String   @id @default(cuid())
+  couponId        String   @unique
+  ruleType        String   // BOGO | CATEGORY_RESTRICT | MIN_ITEMS | FREE_SHIPPING
+  buyQty          Int?     // BOGO: buy this many
+  getQty          Int?     // BOGO: get this many free
+  categoryId      String?  // CATEGORY_RESTRICT: only applies to this category
+  minItems        Int?     // MIN_ITEMS: cart must have at least N items
+  maxDiscount     Decimal? // cap the discount amount
+  isStackable     Boolean  @default(false)
+  usagePerUser    Int?     // max uses per customer
+  createdAt       DateTime @default(now())
+
+  coupon   Coupon    @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id])
+
+  @@map("coupon_rules")
+}
+
+// ─────────────────────────────────────────────
+// MULTI-LOCATION INVENTORY (F8)
+// ─────────────────────────────────────────────
+
+model Location {
+  id        String   @id @default(cuid())
+  name      String
+  address   String?
+  phone     String?
+  isActive  Boolean  @default(true)
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  stock LocationStock[]
+
+  @@map("locations")
+}
+
+model LocationStock {
+  id         String @id @default(cuid())
+  locationId String
+  variantId  String
+  stock      Int    @default(0)
+
+  location Location       @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  variant  ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([locationId, variantId])
+  @@map("location_stock")
+}
+
+// ─────────────────────────────────────────────
+// SHIPPING LABELS (F9)
+// ─────────────────────────────────────────────
+
+model ShippingLabel {
+  id            String   @id @default(cuid())
+  orderId       String   @unique
+  courier       String   // PATHAO | STEADFAST
+  consignmentId String?
+  trackingCode  String?
+  labelUrl      String?
+  barcode       String?
+  status        String   @default("PENDING") // PENDING | SUBMITTED | IN_TRANSIT | DELIVERED
+  apiResponse   Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([orderId])
+  @@map("shipping_labels")
 }
