@@ -3,12 +3,12 @@ import prisma from "@/lib/prisma"
 
 export async function POST(req: Request) {
   try {
-    const { productId, question, askerName } = await req.json()
+    const { productId, question, guestName } = await req.json()
     if (!productId || !question?.trim()) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 })
     }
     const qa = await prisma.reviewQA.create({
-      data: { productId, question: question.trim(), askerName: askerName?.trim() || null },
+      data: { productId, question: question.trim(), guestName: guestName?.trim() || null },
     })
     return NextResponse.json({ id: qa.id })
   } catch (e: any) {

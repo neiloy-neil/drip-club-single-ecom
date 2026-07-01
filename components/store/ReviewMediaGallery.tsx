@@ -5,15 +5,15 @@ import { X, ChevronLeft, ChevronRight } from "lucide-react"
 
 type ReviewWithMedia = {
   id: string
-  authorName: string | null
+  userId: string
   rating: number
-  body: string | null
+  comment: string | null
   media: { id: string; url: string; type: string }[]
 }
 
 export default function ReviewMediaGallery({ reviews }: { reviews: ReviewWithMedia[] }) {
   const allMedia = reviews.flatMap((r) =>
-    r.media.map((m) => ({ ...m, reviewerName: r.authorName, rating: r.rating }))
+    r.media.map((m) => ({ ...m, reviewerName: "Customer", rating: r.rating }))
   )
 
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null)

@@ -8,11 +8,11 @@ type QA = {
   id: string
   question: string
   answer: string | null
-  askerName: string | null
+  guestName: string | null
   createdAt: string
 }
 
-export default function ProductQA({ productId, qas }: { productId: string; qas: QA[] }) {
+export default function ProductQA({ productId, qas }: { productId: string; qas: any[] }) {
   const [question, setQuestion] = useState("")
   const [name, setName] = useState("")
   const [submitting, setSubmitting] = useState(false)
@@ -30,7 +30,7 @@ export default function ProductQA({ productId, qas }: { productId: string; qas: 
       const res = await fetch("/api/store/product-qa", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId, question, askerName: name }),
+        body: JSON.stringify({ productId, question, guestName: name }),
       })
       if (res.ok) { setDone(true); toast.success("Question submitted! We'll answer it soon.") }
       else toast.error("Failed to submit question")
