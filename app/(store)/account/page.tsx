@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useSession, signOut } from "@/hooks/useSession"
 import { useRouter } from "next/navigation"
-import { User, Package, MapPin, Gift, LogOut } from "lucide-react"
+import { User, Package, MapPin, Gift, LogOut, Wallet, Link2 } from "lucide-react"
 import { toast } from "sonner"
 import AddressList from "@/components/store/account/AddressList"
 
@@ -13,6 +13,8 @@ export default function AccountPage() {
   const [activeTab, setActiveTab] = useState("orders")
   const [orders, setOrders] = useState<any[]>([])
   const [loyaltyBalance, setLoyaltyBalance] = useState(0)
+  const [storeCreditBalance, setStoreCreditBalance] = useState(0)
+  const [affiliate, setAffiliate] = useState<any>(null)
   const [ordersLoading, setOrdersLoading] = useState(true)
 
   // Redirect to login if not authenticated
@@ -31,13 +33,12 @@ export default function AccountPage() {
       .catch(() => setOrdersLoading(false))
   }, [status])
 
-  // Fetch loyalty balance
+  // Fetch loyalty balance, store credit, affiliate
   useEffect(() => {
     if (status !== "authenticated") return
-    fetch("/api/account/loyalty")
-      .then(r => r.json())
-      .then(d => setLoyaltyBalance(d.balance || 0))
-      .catch(() => {})
+    fetch("/api/account/loyalty").then(r => r.json()).then(d => setLoyaltyBalance(d.balance || 0)).catch(() => {})
+    fetch("/api/account/store-credit").then(r => r.json()).then(d => setStoreCreditBalance(d.balance || 0)).catch(() => {})
+    fetch("/api/account/affiliate").then(r => r.json()).then(d => setAffiliate(d.affiliate || null)).catch(() => {})
   }, [status])
 
   async function handleSignOut() {
@@ -116,6 +117,29 @@ export default function AccountPage() {
               {loyaltyBalance} pt
             </span>
           </button>
+          {storeCreditBalance > 0 && (
+            <button
+              onClick={() => setActiveTab("credit")}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                activeTab === "credit" ? "bg-drip-black text-white" : "hover:bg-drip-muted text-drip-text-muted hover:text-drip-black"
+              }`}
+            >
+              <div className="flex items-center gap-3"><Wallet className="w-4 h-4" /> Store Credit</div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${activeTab === "credit" ? "bg-white text-drip-black" : "bg-green-100 text-green-800"}`}>
+                ৳{storeCreditBalance}
+              </span>
+            </button>
+          )}
+          {affiliate && (
+            <button
+              onClick={() => setActiveTab("affiliate")}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                activeTab === "affiliate" ? "bg-drip-black text-white" : "hover:bg-drip-muted text-drip-text-muted hover:text-drip-black"
+              }`}
+            >
+              <Link2 className="w-4 h-4" /> Referral
+            </button>
+          )}
           <div className="pt-8 mt-8 border-t border-drip-border">
             <button
               onClick={handleSignOut}
@@ -209,6 +233,65 @@ export default function AccountPage() {
 
           {activeTab === "addresses" && (
             <AddressList />
+          )}
+
+          {activeTab === "credit" && (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-heading font-bold">Store Credit</h2>
+              <div className="bg-drip-black text-white rounded-3xl p-8 relative overflow-hidden">
+                <div className="absolute right-0 top-0 w-64 h-64 bg-green-500/10 rounded-full blur-3xl" />
+                <div className="relative z-10">
+                  <p className="text-gray-400 uppercase tracking-widest text-xs font-bold mb-2">Available Balance</p>
+                  <h3 className="text-5xl font-mono font-bold text-green-400 mb-2">৳{storeCreditBalance.toLocaleString()}</h3>
+                  <p className="text-sm text-gray-300">Automatically applied at checkout when you place your next order.</p>
+                </div>
+              </div>
+              <p className="text-sm text-drip-text-muted">Store credit never expires and can be used toward any purchase. You'll see the option to apply it in step 3 of checkout.</p>
+            </div>
+          )}
+
+          {activeTab === "affiliate" && affiliate && (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-heading font-bold">Your Referral Dashboard</h2>
+              <div className="bg-white border border-drip-border rounded-2xl p-6 space-y-4">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-drip-text-muted mb-2">Your Referral Link</p>
+                  <div className="flex gap-2">
+                    <input
+                      readOnly
+                      value={`${window.location.origin}?ref=${affiliate.code}`}
+                      className="flex-1 bg-drip-muted rounded-lg px-4 py-2 text-sm font-mono"
+                    />
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(`${window.location.origin}?ref=${affiliate.code}`); }}
+                      className="px-4 py-2 bg-drip-black text-white rounded-lg text-xs font-bold hover:bg-drip-gold transition-colors"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4 pt-4 border-t border-drip-border">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-widest text-drip-text-muted">Clicks</p>
+                    <p className="text-2xl font-mono font-bold mt-1">{affiliate.totalClicks || 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-widest text-drip-text-muted">Orders</p>
+                    <p className="text-2xl font-mono font-bold mt-1">{affiliate._count?.conversions || 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-widest text-drip-text-muted">Earned</p>
+                    <p className="text-2xl font-mono font-bold mt-1 text-drip-gold">৳{Number(affiliate.totalEarned || 0).toLocaleString()}</p>
+                  </div>
+                </div>
+                <div className="pt-4 border-t border-drip-border">
+                  <p className="text-xs text-drip-text-muted">
+                    Commission: {affiliate.commissionType === "PERCENTAGE" ? `${affiliate.commissionValue}%` : `৳${affiliate.commissionValue}`} per referred order.
+                    Payouts are processed weekly to your registered bKash number.
+                  </p>
+                </div>
+              </div>
+            </div>
           )}
 
           {activeTab === "loyalty" && (

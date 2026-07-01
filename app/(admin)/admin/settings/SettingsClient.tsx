@@ -72,6 +72,18 @@ export function SettingsClient({
   const [metaDescription, setMetaDescription] = useState(initialSettings["meta_description"] || "")
   const [isTrackingSaving, setIsTrackingSaving] = useState(false)
 
+  // SMTP Email
+  const [smtpHost, setSmtpHost] = useState(initialSettings["smtp_host"] || "")
+  const [smtpPort, setSmtpPort] = useState(initialSettings["smtp_port"] || "587")
+  const [smtpSecure, setSmtpSecure] = useState(initialSettings["smtp_secure"] === "true")
+  const [smtpUser, setSmtpUser] = useState(initialSettings["smtp_user"] || "")
+  const [smtpPass, setSmtpPass] = useState(initialSettings["smtp_pass"] || "")
+  const [smtpFromName, setSmtpFromName] = useState(initialSettings["smtp_from_name"] || "")
+  const [smtpFromEmail, setSmtpFromEmail] = useState(initialSettings["smtp_from_email"] || "")
+  const [testEmailTo, setTestEmailTo] = useState("")
+  const [isSmtpSaving, setIsSmtpSaving] = useState(false)
+  const [isSendingTest, setIsSendingTest] = useState(false)
+
   const [inviteEmail, setInviteEmail] = useState("")
   const [inviteRole, setInviteRole] = useState("STAFF")
   const [isInviteOpen, setIsInviteOpen] = useState(false)
@@ -196,6 +208,52 @@ export function SettingsClient({
       toast.error("Error saving tracking settings")
     } finally {
       setIsTrackingSaving(false)
+    }
+  }
+
+  const handleSaveSmtp = async () => {
+    setIsSmtpSaving(true)
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          settings: {
+            smtp_host: smtpHost,
+            smtp_port: smtpPort,
+            smtp_secure: smtpSecure,
+            smtp_user: smtpUser,
+            smtp_pass: smtpPass,
+            smtp_from_name: smtpFromName,
+            smtp_from_email: smtpFromEmail,
+          },
+        }),
+      })
+      if (res.ok) toast.success("SMTP settings saved")
+      else toast.error("Failed to save SMTP settings")
+    } catch {
+      toast.error("Error saving SMTP settings")
+    } finally {
+      setIsSmtpSaving(false)
+    }
+  }
+
+  const handleSendTestEmail = async () => {
+    if (!testEmailTo) { toast.error("Enter a recipient email address"); return }
+    setIsSendingTest(true)
+    try {
+      const res = await fetch("/api/admin/settings/test-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: testEmailTo }),
+      })
+      const d = await res.json()
+      if (res.ok) toast.success("Test email sent! Check your inbox.")
+      else toast.error(d.error || "Failed to send test email")
+    } catch {
+      toast.error("Error sending test email")
+    } finally {
+      setIsSendingTest(false)
     }
   }
 
@@ -475,6 +533,75 @@ export function SettingsClient({
           <Button onClick={handleSaveTracking} disabled={isTrackingSaving}>
             {isTrackingSaving ? "Saving..." : "Save Tracking & SEO"}
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Email / SMTP</CardTitle>
+          <CardDescription>
+            Configure your outgoing email server. All transactional emails (order confirmations, shipping alerts, abandoned cart recovery) will be sent through this.
+            Leave blank to use the built-in Resend relay (requires <code className="text-xs bg-muted px-1 rounded">RESEND_API_KEY</code> env var).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 max-w-2xl">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">SMTP Host</label>
+              <Input value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} placeholder="smtp.gmail.com" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Port</label>
+              <Input type="number" value={smtpPort} onChange={(e) => setSmtpPort(e.target.value)} placeholder="587" />
+            </div>
+          </div>
+          <div className="flex items-center justify-between border rounded-lg p-3">
+            <div>
+              <p className="text-sm font-medium">Use SSL/TLS (port 465)</p>
+              <p className="text-xs text-muted-foreground">Disable for STARTTLS on port 587</p>
+            </div>
+            <Switch checked={smtpSecure} onCheckedChange={setSmtpSecure} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">SMTP Username</label>
+              <Input value={smtpUser} onChange={(e) => setSmtpUser(e.target.value)} placeholder="noreply@yourstore.com" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">SMTP Password</label>
+              <Input type="password" value={smtpPass} onChange={(e) => setSmtpPass(e.target.value)} placeholder="App password or SMTP password" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">From Name</label>
+              <Input value={smtpFromName} onChange={(e) => setSmtpFromName(e.target.value)} placeholder="DRIP" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">From Email</label>
+              <Input type="email" value={smtpFromEmail} onChange={(e) => setSmtpFromEmail(e.target.value)} placeholder="noreply@yourstore.com" />
+            </div>
+          </div>
+          <Button onClick={handleSaveSmtp} disabled={isSmtpSaving}>
+            {isSmtpSaving ? "Saving..." : "Save SMTP Settings"}
+          </Button>
+
+          <div className="border-t pt-4 space-y-3">
+            <h3 className="text-sm font-semibold">Send Test Email</h3>
+            <p className="text-xs text-muted-foreground">Verify your SMTP config by sending a test email. Save settings first.</p>
+            <div className="flex gap-2">
+              <Input
+                type="email"
+                value={testEmailTo}
+                onChange={(e) => setTestEmailTo(e.target.value)}
+                placeholder="your@email.com"
+                className="flex-1"
+              />
+              <Button variant="outline" onClick={handleSendTestEmail} disabled={isSendingTest}>
+                {isSendingTest ? "Sending..." : "Send Test"}
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

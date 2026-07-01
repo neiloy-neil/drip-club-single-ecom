@@ -3,7 +3,18 @@
 import { useState } from "react"
 import { useCartStore } from "@/store/useCartStore"
 import { useRouter } from "next/navigation"
-import { MapPin, CreditCard, ClipboardCheck, ChevronRight, Check, Gift, MessageSquare, User } from "lucide-react"
+import { MapPin, CreditCard, ClipboardCheck, ChevronRight, Check, Gift, MessageSquare, User, Star, Wallet } from "lucide-react"
+
+type CheckoutField = {
+  id: string
+  label: string
+  placeholder: string | null
+  type: string
+  options: string[]
+  isRequired: boolean
+  step: number
+  sortOrder: number
+}
 
 export default function CheckoutForm({
   freeShippingThreshold = 1000,
@@ -14,6 +25,11 @@ export default function CheckoutForm({
   taxLabel = "VAT",
   giftWrapEnabled = false,
   giftWrapCharge = 50,
+  checkoutFields = [],
+  loyaltyBalance = 0,
+  loyaltyMaxDiscount = 0,
+  storeCreditBalance = 0,
+  userId,
 }: {
   freeShippingThreshold?: number
   shippingChargeAmount?: number
@@ -23,6 +39,11 @@ export default function CheckoutForm({
   taxLabel?: string
   giftWrapEnabled?: boolean
   giftWrapCharge?: number
+  checkoutFields?: CheckoutField[]
+  loyaltyBalance?: number
+  loyaltyMaxDiscount?: number
+  storeCreditBalance?: number
+  userId?: string
 }) {
   const { items, clearCart } = useCartStore()
   const router = useRouter()
@@ -45,11 +66,24 @@ export default function CheckoutForm({
   const [giftWrap, setGiftWrap] = useState(false)
   const [giftMessage, setGiftMessage] = useState("")
 
+  // Loyalty points redemption
+  const [redeemPoints, setRedeemPoints] = useState(false)
+  const [pointsToRedeem, setPointsToRedeem] = useState(0)
+
+  // Store credit redemption
+  const [redeemCredit, setRedeemCredit] = useState(false)
+  const [creditToRedeem, setCreditToRedeem] = useState(0)
+
+  // Custom checkout fields (keyed by field id)
+  const [customFields, setCustomFields] = useState<Record<string, string>>({})
+
   const subtotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0)
   const shippingCharge = subtotal >= freeShippingThreshold ? 0 : shippingChargeAmount
   const taxAmount = taxEnabled ? Math.round((subtotal * taxRate) / 100) : 0
   const giftWrapAmount = giftWrap ? giftWrapCharge : 0
-  const total = subtotal + shippingCharge + taxAmount + giftWrapAmount
+  const loyaltyDiscount = redeemPoints ? Math.min(pointsToRedeem, loyaltyMaxDiscount) : 0
+  const creditDiscount = redeemCredit ? Math.min(creditToRedeem, storeCreditBalance) : 0
+  const total = Math.max(0, subtotal + shippingCharge + taxAmount + giftWrapAmount - loyaltyDiscount - creditDiscount)
 
   const handleSubmitStep1 = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -88,6 +122,11 @@ export default function CheckoutForm({
           giftWrapCharge: giftWrapAmount,
           isGuest,
           guestEmail: isGuest ? guestEmail : null,
+          userId: userId || null,
+          loyaltyPointsRedeemed: redeemPoints ? Math.min(pointsToRedeem * 100, loyaltyBalance) : 0,
+          loyaltyDiscount,
+          storeCreditRedeemed: redeemCredit ? creditDiscount : 0,
+          customFields: Object.keys(customFields).length > 0 ? customFields : null,
         }),
       })
       const orderData = await orderRes.json()
@@ -311,6 +350,103 @@ export default function CheckoutForm({
 
           {step === 3 && (
             <div className="p-6 space-y-6">
+
+              {/* Custom checkout fields for step 3 */}
+              {checkoutFields.filter(f => f.step === 3).map(field => (
+                <div key={field.id} className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-widest text-drip-text-muted">
+                    {field.label}{field.isRequired ? " *" : ""}
+                  </label>
+                  {field.type === "SELECT" ? (
+                    <select
+                      required={field.isRequired}
+                      value={customFields[field.id] || ""}
+                      onChange={e => setCustomFields({ ...customFields, [field.id]: e.target.value })}
+                      className={inputCls}
+                    >
+                      <option value="">Select…</option>
+                      {(field.options as string[]).map((opt: string) => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  ) : field.type === "TEXTAREA" ? (
+                    <textarea
+                      required={field.isRequired}
+                      rows={2}
+                      value={customFields[field.id] || ""}
+                      onChange={e => setCustomFields({ ...customFields, [field.id]: e.target.value })}
+                      placeholder={field.placeholder || ""}
+                      className={`${inputCls} resize-none`}
+                    />
+                  ) : (
+                    <input
+                      type={field.type === "DATE" ? "date" : field.type === "NUMBER" ? "number" : "text"}
+                      required={field.isRequired}
+                      value={customFields[field.id] || ""}
+                      onChange={e => setCustomFields({ ...customFields, [field.id]: e.target.value })}
+                      placeholder={field.placeholder || ""}
+                      className={inputCls}
+                    />
+                  )}
+                </div>
+              ))}
+
+              {/* Loyalty points */}
+              {userId && loyaltyBalance > 0 && (
+                <div className="border border-drip-border rounded-xl overflow-hidden">
+                  <label className="flex items-center gap-4 p-4 cursor-pointer hover:bg-drip-muted/20 transition-colors">
+                    <input type="checkbox" checked={redeemPoints} onChange={e => { setRedeemPoints(e.target.checked); if (!e.target.checked) setPointsToRedeem(0) }} className="w-4 h-4 accent-drip-black rounded" />
+                    <Star className="w-5 h-5 text-drip-gold shrink-0" />
+                    <div className="flex-1">
+                      <p className="font-bold text-sm">Redeem Loyalty Points</p>
+                      <p className="text-xs text-drip-text-muted">You have {loyaltyBalance.toLocaleString()} points · max discount ৳{loyaltyMaxDiscount}</p>
+                    </div>
+                  </label>
+                  {redeemPoints && (
+                    <div className="border-t border-drip-border p-4 bg-drip-muted/10 space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-drip-text-muted block">Discount amount (৳)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={loyaltyMaxDiscount}
+                        value={pointsToRedeem}
+                        onChange={e => setPointsToRedeem(Math.min(Number(e.target.value), loyaltyMaxDiscount))}
+                        className={inputCls}
+                        placeholder={`Max ৳${loyaltyMaxDiscount}`}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Store credit */}
+              {userId && storeCreditBalance > 0 && (
+                <div className="border border-drip-border rounded-xl overflow-hidden">
+                  <label className="flex items-center gap-4 p-4 cursor-pointer hover:bg-drip-muted/20 transition-colors">
+                    <input type="checkbox" checked={redeemCredit} onChange={e => { setRedeemCredit(e.target.checked); if (!e.target.checked) setCreditToRedeem(0) }} className="w-4 h-4 accent-drip-black rounded" />
+                    <Wallet className="w-5 h-5 text-drip-success shrink-0" />
+                    <div className="flex-1">
+                      <p className="font-bold text-sm">Use Store Credit</p>
+                      <p className="text-xs text-drip-text-muted">Balance: ৳{storeCreditBalance.toLocaleString()}</p>
+                    </div>
+                  </label>
+                  {redeemCredit && (
+                    <div className="border-t border-drip-border p-4 bg-drip-muted/10 space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-drip-text-muted block">Amount to use (৳)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={storeCreditBalance}
+                        value={creditToRedeem}
+                        onChange={e => setCreditToRedeem(Math.min(Number(e.target.value), storeCreditBalance))}
+                        className={inputCls}
+                        placeholder={`Max ৳${storeCreditBalance}`}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Order note */}
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-drip-text-muted">
@@ -407,6 +543,18 @@ export default function CheckoutForm({
               <div className="flex justify-between text-drip-text-muted">
                 <span>Gift Wrapping</span>
                 <span className="font-mono">৳{giftWrapCharge}</span>
+              </div>
+            )}
+            {loyaltyDiscount > 0 && (
+              <div className="flex justify-between text-drip-text-muted">
+                <span>Loyalty Points</span>
+                <span className="font-mono text-drip-success">−৳{loyaltyDiscount.toLocaleString()}</span>
+              </div>
+            )}
+            {creditDiscount > 0 && (
+              <div className="flex justify-between text-drip-text-muted">
+                <span>Store Credit</span>
+                <span className="font-mono text-drip-success">−৳{creditDiscount.toLocaleString()}</span>
               </div>
             )}
             <div className="flex justify-between border-t border-drip-border pt-4 font-bold text-lg items-center">

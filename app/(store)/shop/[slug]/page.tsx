@@ -7,10 +7,14 @@ import ProductCard from "@/components/store/ProductCard"
 import ReviewSection from "@/components/store/ReviewSection"
 import FlashSaleCountdown from "@/components/store/FlashSaleCountdown"
 import SocialProof from "@/components/store/SocialProof"
+import ProductAddons from "@/components/store/ProductAddons"
+import ReviewMediaGallery from "@/components/store/ReviewMediaGallery"
+import ProductQA from "@/components/store/ProductQA"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Truck, RefreshCw, ShieldCheck } from "lucide-react"
 import type { Metadata } from "next"
 import { getActiveFlashSale, applyFlashSaleDiscount } from "@/lib/flashSale"
+import Link from "next/link"
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://drip.com.bd"
 
@@ -50,6 +54,8 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       category: true,
       images: { orderBy: { sortOrder: 'asc' } },
       variants: true,
+      brand: true,
+      addons: { where: { isActive: true }, orderBy: { sortOrder: 'asc' } },
     }
   }).catch(() => null)
 
@@ -57,7 +63,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     notFound()
   }
 
-  const [reviewAgg, flashSale, attrConfig] = await Promise.all([
+  const [reviewAgg, flashSale, attrConfig, reviews, qas] = await Promise.all([
     prisma.review.aggregate({
       where: { productId: product.id, isApproved: true },
       _avg: { rating: true },
@@ -67,6 +73,16 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     prisma.categoryAttributeConfig.findUnique({
       where: { categoryId: product.categoryId },
     }).catch(() => null),
+    prisma.review.findMany({
+      where: { productId: product.id, isApproved: true },
+      include: { media: true },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    }).catch(() => []),
+    prisma.reviewQA.findMany({
+      where: { productId: product.id },
+      orderBy: { createdAt: 'desc' },
+    }).catch(() => []),
   ])
 
   const salePrice = flashSale ? applyFlashSaleDiscount(Number(product.price), flashSale) : null
@@ -90,7 +106,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     description: product.description || "",
     image: product.images.map((i) => i.url),
     sku: product.variants[0]?.sku || product.id,
-    brand: { "@type": "Brand", name: "DRIP" },
+    brand: { "@type": "Brand", name: product.brand?.name || "DRIP" },
     ...(reviewAgg._count.rating > 0 && {
       aggregateRating: {
         "@type": "AggregateRating",
@@ -138,6 +154,11 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
             {/* Title & Price */}
             <div className="mb-8">
+              {product.brand && (
+                <Link href={`/brands/${product.brand.slug}`} className="inline-block mb-3 text-xs font-bold uppercase tracking-widest text-drip-text-muted hover:text-drip-gold transition-colors border border-drip-border rounded-full px-3 py-1">
+                  {product.brand.name}
+                </Link>
+              )}
               <h1 className="text-3xl lg:text-4xl font-heading font-bold text-drip-black mb-2 leading-tight">{product.name}</h1>
               {reviewAgg._count.rating > 0 && (
                 <div className="flex items-center gap-2 mb-4 text-sm text-drip-text-muted">
@@ -186,6 +207,11 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
               attr2Label={attrConfig?.attr2Label || "Color"}
               categoryId={product.categoryId}
             />
+
+            {/* Product Add-ons */}
+            {product.addons.length > 0 && (
+              <ProductAddons addons={serialize(product.addons)} productId={product.id} />
+            )}
 
             {/* Accordions for extra info */}
             <div className="mt-12 border-t border-drip-border">
@@ -237,7 +263,17 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                     Reviews {reviewAgg._count.rating > 0 && `(${reviewAgg._count.rating})`}
                   </AccordionTrigger>
                   <AccordionContent>
+                    <ReviewMediaGallery reviews={serialize(reviews)} />
                     <ReviewSection productId={product.id} />
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="qa" className="border-drip-border">
+                  <AccordionTrigger className="text-sm font-bold uppercase tracking-widest hover:text-drip-gold hover:no-underline">
+                    Questions & Answers {qas.length > 0 && `(${qas.length})`}
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <ProductQA productId={product.id} qas={serialize(qas)} />
                   </AccordionContent>
                 </AccordionItem>
 

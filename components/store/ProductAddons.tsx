@@ -1,0 +1,66 @@
+"use client"
+
+import { useState } from "react"
+import { Plus, Minus } from "lucide-react"
+
+type Addon = {
+  id: string
+  name: string
+  description: string | null
+  price: number
+  type: string
+  options: string[]
+  isActive: boolean
+}
+
+export default function ProductAddons({ addons, productId }: { addons: Addon[]; productId: string }) {
+  const [selected, setSelected] = useState<Record<string, boolean>>({})
+  const [selectValues, setSelectValues] = useState<Record<string, string>>({})
+
+  const total = addons
+    .filter((a) => selected[a.id])
+    .reduce((s, a) => s + Number(a.price), 0)
+
+  return (
+    <div className="mt-6 space-y-3">
+      <h3 className="text-xs font-bold uppercase tracking-widest text-drip-text-muted">Add-ons</h3>
+      {addons.map((addon) => (
+        <div
+          key={addon.id}
+          className={`border rounded-xl p-4 transition-all cursor-pointer ${selected[addon.id] ? "border-drip-black bg-drip-muted/20" : "border-drip-border hover:border-drip-black/30"}`}
+          onClick={() => setSelected({ ...selected, [addon.id]: !selected[addon.id] })}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${selected[addon.id] ? "bg-drip-black border-drip-black" : "border-drip-border"}`}>
+                {selected[addon.id] && <Plus className="w-3 h-3 text-white" strokeWidth={3} />}
+              </div>
+              <div>
+                <p className="font-semibold text-sm">{addon.name}</p>
+                {addon.description && <p className="text-xs text-drip-text-muted">{addon.description}</p>}
+              </div>
+            </div>
+            <span className="font-mono font-bold text-sm shrink-0 ml-2">+৳{Number(addon.price).toLocaleString()}</span>
+          </div>
+          {selected[addon.id] && addon.type === "SELECT" && addon.options.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-drip-border" onClick={(e) => e.stopPropagation()}>
+              <select
+                value={selectValues[addon.id] || ""}
+                onChange={(e) => setSelectValues({ ...selectValues, [addon.id]: e.target.value })}
+                className="w-full bg-white border border-drip-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-drip-gold"
+              >
+                <option value="">Select option…</option>
+                {addon.options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+              </select>
+            </div>
+          )}
+        </div>
+      ))}
+      {total > 0 && (
+        <p className="text-sm text-drip-text-muted">
+          Add-ons total: <span className="font-bold text-drip-black">+৳{total.toLocaleString()}</span>
+        </p>
+      )}
+    </div>
+  )
+}

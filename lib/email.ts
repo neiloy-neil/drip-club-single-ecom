@@ -1,7 +1,63 @@
-import { Resend } from "resend"
+import nodemailer from "nodemailer"
 import prisma from "@/lib/prisma"
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+// ---------------------------------------------------------------------------
+// Transport factory — reads SMTP config from Setting table at call time.
+// Falls back to Resend SMTP relay if no custom SMTP configured.
+// ---------------------------------------------------------------------------
+
+async function getSmtpConfig() {
+  const keys = ["smtp_host", "smtp_port", "smtp_secure", "smtp_user", "smtp_pass", "smtp_from_name", "smtp_from_email"]
+  const rows = await prisma.setting.findMany({ where: { key: { in: keys } } })
+  const s = Object.fromEntries(rows.map((r) => [r.key, r.value]))
+  return s
+}
+
+async function createTransport() {
+  const s = await getSmtpConfig()
+
+  if (s.smtp_host && s.smtp_user && s.smtp_pass) {
+    return nodemailer.createTransport({
+      host: s.smtp_host,
+      port: Number(s.smtp_port || 587),
+      secure: s.smtp_secure === "true",
+      auth: { user: s.smtp_user, pass: s.smtp_pass },
+    })
+  }
+
+  // Resend SMTP relay fallback
+  if (process.env.RESEND_API_KEY) {
+    return nodemailer.createTransport({
+      host: "smtp.resend.com",
+      port: 465,
+      secure: true,
+      auth: { user: "resend", pass: process.env.RESEND_API_KEY },
+    })
+  }
+
+  // No email configured — return null transport that logs instead of sending
+  return nodemailer.createTransport({ jsonTransport: true })
+}
+
+async function getSenderAddress() {
+  const rows = await prisma.setting.findMany({
+    where: { key: { in: ["smtp_from_name", "smtp_from_email", "store_name", "support_email"] } },
+  })
+  const s = Object.fromEntries(rows.map((r) => [r.key, r.value]))
+  const name = s.smtp_from_name || s.store_name || "DRIP"
+  const email = s.smtp_from_email || s.support_email || process.env.FROM_EMAIL || "noreply@drip.fashion"
+  return `${name} <${email}>`
+}
+
+async function sendMail(to: string, subject: string, html: string) {
+  const transport = await createTransport()
+  const from = await getSenderAddress()
+  await transport.sendMail({ from, to, subject, html })
+}
+
+// ---------------------------------------------------------------------------
+// Store metadata (name / logo / url) for email templates
+// ---------------------------------------------------------------------------
 
 async function getStoreMeta() {
   const settings = await prisma.setting.findMany({
@@ -15,6 +71,10 @@ async function getStoreMeta() {
     url: map.store_url || process.env.NEXT_PUBLIC_SITE_URL || "https://drip.fashion",
   }
 }
+
+// ---------------------------------------------------------------------------
+// Base HTML template
+// ---------------------------------------------------------------------------
 
 function baseTemplate(store: { name: string; logo: string; url: string }, content: string) {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -56,6 +116,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </body></html>`
 }
 
+// ---------------------------------------------------------------------------
+// Email send functions
+// ---------------------------------------------------------------------------
+
 type OrderEmailData = {
   to: string
   orderNumber: string
@@ -93,15 +157,12 @@ export async function sendOrderConfirmation(data: OrderEmailData) {
     <h1 style="font-size:22px;font-weight:700;margin-bottom:6px">Order confirmed!</h1>
     <p class="muted">Hi ${data.customerName}, your order has been placed and is being processed.</p>
     <hr class="divider">
-
     <div class="grid-2">
       <div><div class="label">Order number</div><div class="value">${data.orderNumber}</div></div>
       <div><div class="label">Payment method</div><div class="value">${data.paymentMethod}</div></div>
     </div>
-
     <h3 style="font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:12px">Items ordered</h3>
     ${itemRows}
-
     <div style="margin-top:16px">
       <div class="total-row"><span>Subtotal</span><span>৳${data.subtotal.toLocaleString()}</span></div>
       ${data.shippingCharge > 0 ? `<div class="total-row"><span>Shipping</span><span>৳${data.shippingCharge.toLocaleString()}</span></div>` : `<div class="total-row"><span>Shipping</span><span class="tag tag-green">Free</span></div>`}
@@ -109,25 +170,17 @@ export async function sendOrderConfirmation(data: OrderEmailData) {
       ${data.giftWrapCharge > 0 ? `<div class="total-row"><span>Gift wrap</span><span>৳${data.giftWrapCharge.toLocaleString()}</span></div>` : ""}
       <div class="total-final"><span>Total</span><span>৳${data.total.toLocaleString()}</span></div>
     </div>
-
     <hr class="divider">
     <h3 style="font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:12px">Shipping to</h3>
     <p style="font-weight:500">${data.shippingName}</p>
     <p class="muted">${data.shippingPhone}</p>
     <p class="muted">${data.shippingAddress}, ${data.shippingArea}</p>
     <p class="muted">${data.shippingDistrict}, ${data.shippingDivision}</p>
-
     ${data.note ? `<div class="alert" style="margin-top:20px"><strong>Your note:</strong> ${data.note}</div>` : ""}
     ${data.giftWrap ? `<div class="alert" style="margin-top:16px">🎁 <strong>Gift wrapped</strong>${data.giftMessage ? ` — "${data.giftMessage}"` : ""}</div>` : ""}
-
     <a href="${store.url}/account/orders" class="btn">Track your order →</a>`
 
-  await resend.emails.send({
-    from: `${store.name} <${store.email}>`,
-    to: data.to,
-    subject: `Order confirmed — ${data.orderNumber}`,
-    html: baseTemplate(store, content),
-  })
+  await sendMail(data.to, `Order confirmed — ${data.orderNumber}`, baseTemplate(store, content))
 }
 
 export async function sendShippingDispatched(data: {
@@ -150,12 +203,7 @@ export async function sendShippingDispatched(data: {
     ${data.trackingUrl ? `<a href="${data.trackingUrl}" class="btn">Track shipment →</a>` : `<a href="${store.url}/account/orders" class="btn">View order →</a>`}
     <p class="muted" style="margin-top:16px">Delivery typically takes 1–3 business days after dispatch.</p>`
 
-  await resend.emails.send({
-    from: `${store.name} <${store.email}>`,
-    to: data.to,
-    subject: `Dispatched — ${data.orderNumber} is on the way!`,
-    html: baseTemplate(store, content),
-  })
+  await sendMail(data.to, `Dispatched — ${data.orderNumber} is on the way!`, baseTemplate(store, content))
 }
 
 export async function sendOrderStatusUpdate(data: {
@@ -187,12 +235,7 @@ export async function sendOrderStatusUpdate(data: {
     ${data.note ? `<div class="alert">${data.note}</div>` : ""}
     <a href="${store.url}/account/orders" class="btn">View order →</a>`
 
-  await resend.emails.send({
-    from: `${store.name} <${store.email}>`,
-    to: data.to,
-    subject: `${label} — ${data.orderNumber}`,
-    html: baseTemplate(store, content),
-  })
+  await sendMail(data.to, `${label} — ${data.orderNumber}`, baseTemplate(store, content))
 }
 
 export async function sendReturnUpdate(data: {
@@ -219,12 +262,7 @@ export async function sendReturnUpdate(data: {
     ${data.adminNote ? `<div class="alert">${data.adminNote}</div>` : ""}
     <a href="${store.url}/account/orders" class="btn">View order →</a>`
 
-  await resend.emails.send({
-    from: `${store.name} <${store.email}>`,
-    to: data.to,
-    subject: `${label} — ${data.orderNumber}`,
-    html: baseTemplate(store, content),
-  })
+  await sendMail(data.to, `${label} — ${data.orderNumber}`, baseTemplate(store, content))
 }
 
 export async function sendBackInStockAlert(data: {
@@ -245,12 +283,7 @@ export async function sendBackInStockAlert(data: {
     <p class="muted">Stock is limited — grab it before it sells out again.</p>
     <a href="${data.productUrl}" class="btn">Shop now →</a>`
 
-  await resend.emails.send({
-    from: `${store.name} <${store.email}>`,
-    to: data.to,
-    subject: `Back in stock: ${data.productName}`,
-    html: baseTemplate(store, content),
-  })
+  await sendMail(data.to, `Back in stock: ${data.productName}`, baseTemplate(store, content))
 }
 
 export async function sendAbandonedCartEmail(data: {
@@ -280,12 +313,7 @@ export async function sendAbandonedCartEmail(data: {
     <a href="${data.recoveryUrl}" class="btn">Complete your order →</a>
     <p class="muted" style="margin-top:16px">This link takes you straight back to checkout. Your bag is saved.</p>`
 
-  await resend.emails.send({
-    from: `${store.name} <${store.email}>`,
-    to: data.to,
-    subject: `Your bag is waiting — complete your ${store.name} order`,
-    html: baseTemplate(store, content),
-  })
+  await sendMail(data.to, `Your bag is waiting — complete your ${store.name} order`, baseTemplate(store, content))
 }
 
 export async function sendGiftCardEmail(data: {
@@ -311,12 +339,7 @@ export async function sendGiftCardEmail(data: {
     ${data.expiresAt ? `<p class="muted" style="text-align:center">Valid until ${new Date(data.expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</p>` : ""}
     <a href="${store.url}" class="btn" style="display:block;text-align:center">Start shopping →</a>`
 
-  await resend.emails.send({
-    from: `${store.name} <${store.email}>`,
-    to: data.to,
-    subject: `${data.senderName} sent you a ৳${data.amount.toLocaleString()} ${store.name} gift card`,
-    html: baseTemplate(store, content),
-  })
+  await sendMail(data.to, `${data.senderName} sent you a ৳${data.amount.toLocaleString()} ${store.name} gift card`, baseTemplate(store, content))
 }
 
 export async function sendWelcomeEmail(data: { to: string; name: string }) {
@@ -328,12 +351,7 @@ export async function sendWelcomeEmail(data: { to: string; name: string }) {
     <p>Explore the latest drops, save your favourites, and track your orders — all from one place.</p>
     <a href="${store.url}/shop" class="btn">Start shopping →</a>`
 
-  await resend.emails.send({
-    from: `${store.name} <${store.email}>`,
-    to: data.to,
-    subject: `Welcome to ${store.name}`,
-    html: baseTemplate(store, content),
-  })
+  await sendMail(data.to, `Welcome to ${store.name}`, baseTemplate(store, content))
 }
 
 export async function sendStoreCreditIssued(data: {
@@ -355,10 +373,5 @@ export async function sendStoreCreditIssued(data: {
     ${data.reason ? `<p class="muted" style="margin-top:12px">Reason: ${data.reason}</p>` : ""}
     <a href="${store.url}/shop" class="btn">Use your credit →</a>`
 
-  await resend.emails.send({
-    from: `${store.name} <${store.email}>`,
-    to: data.to,
-    subject: `৳${data.amount.toLocaleString()} store credit added to your account`,
-    html: baseTemplate(store, content),
-  })
+  await sendMail(data.to, `৳${data.amount.toLocaleString()} store credit added to your account`, baseTemplate(store, content))
 }

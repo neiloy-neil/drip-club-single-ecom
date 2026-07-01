@@ -7,12 +7,15 @@ import { logAudit } from "@/lib/auditLog"
 import { refreshCustomerSegments } from "@/lib/customerSegments"
 import { cookies } from "next/headers"
 import { sendOrderConfirmation } from "@/lib/email"
+import { mailchimpAddTags } from "@/lib/mailchimp"
+import { klaviyoOrderPlaced } from "@/lib/klaviyo"
 
 export async function POST(req: Request) {
   try {
     const body = await req.json()
     const { items, address, paymentMethod, subtotal, shippingCharge, total, userId,
-      note, giftWrap, giftMessage, giftWrapCharge, isGuest, guestEmail } = body
+      note, giftWrap, giftMessage, giftWrapCharge, isGuest, guestEmail,
+      loyaltyPointsRedeemed, loyaltyDiscount, storeCreditRedeemed, customFields } = body
 
     if (!items?.length || !address || !paymentMethod) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
@@ -85,7 +88,24 @@ export async function POST(req: Request) {
     const autoDiscount = await getBestAutoDiscount(cartItems, serverSubtotal).catch(() => null)
     const autoDiscountAmount = autoDiscount?.savingAmount || 0
 
-    const serverTotal = serverSubtotal + serverShippingCharge + serverTaxAmount + serverGiftWrapCharge - autoDiscountAmount
+    // Validate loyalty points redemption
+    let serverLoyaltyDiscount = 0
+    if (userId && loyaltyPointsRedeemed > 0) {
+      const loyaltyAgg = await prisma.loyaltyPoint.aggregate({ where: { userId }, _sum: { points: true } })
+      const balance = loyaltyAgg._sum.points ?? 0
+      const redemptionRate = Number((await prisma.setting.findUnique({ where: { key: "loyalty_redemption_rate" } }))?.value || 100)
+      const maxDiscount = Math.floor(balance / redemptionRate)
+      serverLoyaltyDiscount = Math.min(loyaltyDiscount || 0, maxDiscount)
+    }
+
+    // Validate store credit redemption
+    let serverCreditDiscount = 0
+    if (userId && storeCreditRedeemed > 0) {
+      const credit = await prisma.storeCredit.findUnique({ where: { userId } })
+      serverCreditDiscount = Math.min(storeCreditRedeemed, Number(credit?.balance ?? 0))
+    }
+
+    const serverTotal = Math.max(0, serverSubtotal + serverShippingCharge + serverTaxAmount + serverGiftWrapCharge - autoDiscountAmount - serverLoyaltyDiscount - serverCreditDiscount)
 
     const order = await prisma.$transaction(async (tx) => {
       // Re-check stock inside transaction to prevent race conditions
@@ -121,6 +141,7 @@ export async function POST(req: Request) {
           giftWrap: giftWrap || false,
           giftMessage: giftWrap ? (giftMessage || null) : null,
           giftWrapCharge: serverGiftWrapCharge,
+          customFields: customFields || undefined,
           shippingName: address.name,
           shippingPhone: address.phone,
           shippingAddress: address.fullAddress,
@@ -143,6 +164,27 @@ export async function POST(req: Request) {
     })
 
     await logAudit({ action: "order.created", entityType: "Order", entityId: order.id, after: { orderNumber: order.orderNumber, total: serverTotal, paymentMethod } })
+
+    // Deduct loyalty points used
+    if (userId && serverLoyaltyDiscount > 0) {
+      const redemptionRate = Number((await prisma.setting.findUnique({ where: { key: "loyalty_redemption_rate" } }))?.value || 100)
+      const pointsUsed = serverLoyaltyDiscount * redemptionRate
+      prisma.loyaltyPoint.create({
+        data: { userId, points: -pointsUsed, type: "REDEEMED", description: `Redeemed for order ${order.orderNumber}`, orderId: order.id },
+      }).catch(() => {})
+    }
+
+    // Deduct store credit used
+    if (userId && serverCreditDiscount > 0) {
+      prisma.$transaction(async (tx) => {
+        const credit = await tx.storeCredit.findUnique({ where: { userId: userId! } })
+        if (!credit) return
+        await tx.storeCredit.update({ where: { userId: userId! }, data: { balance: { decrement: serverCreditDiscount } } })
+        await tx.storeCreditTransaction.create({
+          data: { userId: userId!, storeCreditId: credit.id, amount: serverCreditDiscount, type: "DEBIT", reason: `Applied to order ${order.orderNumber}`, orderId: order.id },
+        })
+      }).catch(() => {})
+    }
 
     // Refresh customer segments after new order (fire-and-forget)
     if (userId) {
@@ -204,6 +246,22 @@ export async function POST(req: Request) {
         giftWrap: giftWrap || false,
         giftMessage: giftMessage || null,
       }).catch(() => {})
+    }
+
+    // Wire Klaviyo + Mailchimp (fire-and-forget)
+    if (toEmail) {
+      klaviyoOrderPlaced(toEmail, {
+        orderNumber: order.orderNumber,
+        total: serverTotal,
+        items: items.map((item: any) => ({
+          productName: item.name,
+          quantity: item.quantity,
+          price: Number(variantMap[item.variantId].product.price),
+        })),
+      }).catch(() => {})
+      if (!isGuest) {
+        mailchimpAddTags(toEmail, ["has_ordered"]).catch(() => {})
+      }
     }
 
     return NextResponse.json({ orderId: order.id, depositAmount })

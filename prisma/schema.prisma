@@ -232,11 +232,12 @@ model Order {
   total           Decimal
   couponId        String?
   note            String?       // customer note / special instructions
-  giftMessage     String?       // gift card message
+  giftMessage     String?
   giftWrap        Boolean       @default(false)
   giftWrapCharge  Decimal       @default(0)
-  deliveryDate    DateTime?     // requested delivery date
+  deliveryDate    DateTime?
   depositAmount   Decimal       @default(0)
+  customFields    Json?         // answers to admin-defined CheckoutFields
   depositPaid     Boolean       @default(false)
   isGuest         Boolean       @default(false)
   guestEmail      String?

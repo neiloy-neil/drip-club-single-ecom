@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { createAdminClient } from "@/lib/supabase"
+import { mailchimpSubscribe } from "@/lib/mailchimp"
+import { klaviyoSubscribe } from "@/lib/klaviyo"
+import { sendWelcomeEmail } from "@/lib/email"
 
 // Called right after a successful supabase.auth.signUp() on the client.
 // Creates the matching Prisma profile row and mirrors the role into
@@ -29,6 +32,11 @@ export async function POST(req: Request) {
       app_metadata: { role: user.role },
       user_metadata: { name },
     })
+
+    // Fire-and-forget: welcome email + marketing list subscriptions
+    sendWelcomeEmail({ to: email, name }).catch(() => {})
+    mailchimpSubscribe(email, name, ["customer"]).catch(() => {})
+    klaviyoSubscribe(email, name).catch(() => {})
 
     return NextResponse.json({ id: user.id, name: user.name, email: user.email }, { status: 201 })
   } catch (error: any) {

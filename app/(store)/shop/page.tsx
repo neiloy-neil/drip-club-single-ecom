@@ -9,10 +9,11 @@ import { getActiveFlashSaleBatch, applyFlashSaleDiscount } from "@/lib/flashSale
 export default async function ShopPage({
   searchParams
 }: {
-  searchParams: Promise<{ categoryId?: string, size?: string, color?: string, sort?: string, take?: string, sale?: string }>
+  searchParams: Promise<{ categoryId?: string, brandId?: string, size?: string, color?: string, sort?: string, take?: string, sale?: string }>
 }) {
   const params = await searchParams;
   const categoryId = params.categoryId
+  const brandId = params.brandId
   const size = params.size
   const color = params.color
   const sort = params.sort || "newest"
@@ -26,6 +27,7 @@ export default async function ShopPage({
 
   const where: any = { isActive: true }
   if (categoryId) where.categoryId = categoryId
+  if (brandId) where.brandId = brandId
   if (saleOnly) where.comparePrice = { not: null }
 
   if (size || color) {
@@ -34,7 +36,7 @@ export default async function ShopPage({
     if (color) where.variants.some.color = color
   }
 
-  const [products, totalProducts, categories] = await Promise.all([
+  const [products, totalProducts, categories, brands] = await Promise.all([
     prisma.product.findMany({
       where,
       include: { category: true, images: true, variants: true },
@@ -42,7 +44,8 @@ export default async function ShopPage({
       take,
     }).catch(() => []),
     prisma.product.count({ where }).catch(() => 0),
-    prisma.category.findMany({ where: { isActive: true } }).catch(() => [])
+    prisma.category.findMany({ where: { isActive: true } }).catch(() => []),
+    prisma.brand.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } }).catch(() => []),
   ])
 
   const hasMore = totalProducts > take
@@ -77,6 +80,7 @@ export default async function ShopPage({
               </select>
               {/* Hidden inputs to preserve other filters on sort change */}
               {categoryId && <input type="hidden" name="categoryId" value={categoryId} />}
+              {brandId && <input type="hidden" name="brandId" value={brandId} />}
               {size && <input type="hidden" name="size" value={size} />}
               {color && <input type="hidden" name="color" value={color} />}
             </form>
@@ -95,7 +99,7 @@ export default async function ShopPage({
         <div className="hidden lg:block w-64 shrink-0 space-y-10">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-sm uppercase tracking-widest">Filters</h3>
-            {(categoryId || size || color) && (
+            {(categoryId || brandId || size || color) && (
               <Link href="/shop" className="text-xs text-drip-text-muted hover:text-drip-error transition-colors flex items-center gap-1">
                 <X className="w-3 h-3" /> Clear All
               </Link>
@@ -121,6 +125,36 @@ export default async function ShopPage({
               ))}
             </ul>
           </div>
+
+          {brands.length > 0 && (
+            <div className="space-y-4">
+              <h4 className="font-medium text-sm">Brand</h4>
+              <ul className="space-y-3 text-sm text-drip-text-muted">
+                <li>
+                  <Link href={categoryId ? `/shop?categoryId=${categoryId}` : "/shop"} className={`flex items-center gap-3 hover:text-drip-gold transition-colors ${!brandId ? "text-drip-black font-medium" : ""}`}>
+                    <div className={`w-4 h-4 rounded border ${!brandId ? "bg-drip-gold border-drip-gold" : "border-drip-border"}`} />
+                    All Brands
+                  </Link>
+                </li>
+                {brands.map((b: any) => {
+                  const bParams = new URLSearchParams()
+                  if (categoryId) bParams.set("categoryId", categoryId)
+                  if (size) bParams.set("size", size)
+                  if (color) bParams.set("color", color)
+                  if (sort !== "newest") bParams.set("sort", sort)
+                  if (brandId !== b.id) bParams.set("brandId", b.id)
+                  return (
+                    <li key={b.id}>
+                      <Link href={`/shop?${bParams.toString()}`} className={`flex items-center gap-3 hover:text-drip-gold transition-colors ${brandId === b.id ? "text-drip-black font-medium" : ""}`}>
+                        <div className={`w-4 h-4 rounded border ${brandId === b.id ? "bg-drip-gold border-drip-gold" : "border-drip-border"}`} />
+                        {b.name}
+                      </Link>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
 
           <div className="space-y-4">
             <h4 className="font-medium text-sm">Size</h4>

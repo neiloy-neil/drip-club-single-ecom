@@ -1,11 +1,20 @@
 import CheckoutForm from "@/components/store/CheckoutForm"
 import { ShieldCheck } from "lucide-react"
 import prisma from "@/lib/prisma"
+import { auth } from "@/lib/auth"
 
 export default async function CheckoutPage() {
-  const settings = await prisma.setting.findMany({
-    where: { key: { in: ["free_shipping_above", "shipping_charge", "enabled_payment_methods", "tax_enabled", "tax_rate", "tax_label", "gift_wrap_enabled", "gift_wrap_charge"] } },
-  }).catch(() => [])
+  const session = await auth()
+  const userId = session?.user?.id
+
+  const [settings, checkoutFields, loyaltyData, creditData] = await Promise.all([
+    prisma.setting.findMany({
+      where: { key: { in: ["free_shipping_above", "shipping_charge", "enabled_payment_methods", "tax_enabled", "tax_rate", "tax_label", "gift_wrap_enabled", "gift_wrap_charge", "loyalty_points_per_taka", "loyalty_redemption_rate"] } },
+    }).catch(() => []),
+    prisma.checkoutField.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }).catch(() => []),
+    userId ? prisma.loyaltyPoint.aggregate({ where: { userId }, _sum: { points: true } }).catch(() => null) : null,
+    userId ? prisma.storeCredit.findUnique({ where: { userId } }).catch(() => null) : null,
+  ])
 
   const map = Object.fromEntries(settings.map((s) => [s.key, s.value]))
   const freeShippingThreshold = Number(map.free_shipping_above || 1000)
@@ -18,6 +27,15 @@ export default async function CheckoutPage() {
   const taxLabel = map.tax_label || "VAT"
   const giftWrapEnabled = map.gift_wrap_enabled === "true"
   const giftWrapCharge = Number(map.gift_wrap_charge || 50)
+
+  const loyaltyBalance = loyaltyData?._sum?.points ?? 0
+  // 100 points = ৳1 by default (configurable)
+  const loyaltyRedemptionRate = Number(map.loyalty_redemption_rate || 100)
+  const loyaltyMaxDiscount = Math.floor(loyaltyBalance / loyaltyRedemptionRate)
+
+  const storeCreditBalance = Number(creditData?.balance ?? 0)
+
+  const serialisedFields = JSON.parse(JSON.stringify(checkoutFields))
 
   return (
     <div className="bg-drip-bg min-h-screen pt-8 pb-24 animate-in fade-in duration-500">
@@ -39,6 +57,11 @@ export default async function CheckoutPage() {
           taxLabel={taxLabel}
           giftWrapEnabled={giftWrapEnabled}
           giftWrapCharge={giftWrapCharge}
+          checkoutFields={serialisedFields}
+          loyaltyBalance={loyaltyBalance}
+          loyaltyMaxDiscount={loyaltyMaxDiscount}
+          storeCreditBalance={storeCreditBalance}
+          userId={userId}
         />
       </div>
     </div>
