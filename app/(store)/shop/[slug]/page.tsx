@@ -55,7 +55,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       images: { orderBy: { sortOrder: 'asc' } },
       variants: true,
       brand: true,
-      addons: { where: { isActive: true }, orderBy: { sortOrder: 'asc' } },
+      addons: { orderBy: { sortOrder: 'asc' } },
     }
   }).catch(() => null)
 

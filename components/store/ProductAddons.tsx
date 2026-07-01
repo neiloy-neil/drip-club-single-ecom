@@ -5,12 +5,11 @@ import { Plus, Minus } from "lucide-react"
 
 type Addon = {
   id: string
-  name: string
-  description: string | null
-  price: number
+  label: string
   type: string
-  options: string[]
-  isActive: boolean
+  options: { label: string; value: string; priceModifier?: number }[]
+  priceModifier: number
+  isRequired: boolean
 }
 
 export default function ProductAddons({ addons, productId }: { addons: Addon[]; productId: string }) {
@@ -19,7 +18,7 @@ export default function ProductAddons({ addons, productId }: { addons: Addon[]; 
 
   const total = addons
     .filter((a) => selected[a.id])
-    .reduce((s, a) => s + Number(a.price), 0)
+    .reduce((s, a) => s + Number(a.priceModifier), 0)
 
   return (
     <div className="mt-6 space-y-3">
@@ -36,11 +35,10 @@ export default function ProductAddons({ addons, productId }: { addons: Addon[]; 
                 {selected[addon.id] && <Plus className="w-3 h-3 text-white" strokeWidth={3} />}
               </div>
               <div>
-                <p className="font-semibold text-sm">{addon.name}</p>
-                {addon.description && <p className="text-xs text-drip-text-muted">{addon.description}</p>}
+                <p className="font-semibold text-sm">{addon.label}</p>
               </div>
             </div>
-            <span className="font-mono font-bold text-sm shrink-0 ml-2">+৳{Number(addon.price).toLocaleString()}</span>
+            <span className="font-mono font-bold text-sm shrink-0 ml-2">+৳{Number(addon.priceModifier).toLocaleString()}</span>
           </div>
           {selected[addon.id] && addon.type === "SELECT" && addon.options.length > 0 && (
             <div className="mt-3 pt-3 border-t border-drip-border" onClick={(e) => e.stopPropagation()}>
@@ -50,7 +48,9 @@ export default function ProductAddons({ addons, productId }: { addons: Addon[]; 
                 className="w-full bg-white border border-drip-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-drip-gold"
               >
                 <option value="">Select option…</option>
-                {addon.options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                {addon.options.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
               </select>
             </div>
           )}
