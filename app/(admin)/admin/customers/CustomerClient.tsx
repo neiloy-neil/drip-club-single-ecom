@@ -63,7 +63,7 @@ export function CustomerClient({ data }: { data: Customer[] }) {
         <Button type="submit">Search</Button>
       </form>
 
-      <div className="rounded-md border bg-white dark:bg-neutral-950">
+      <div className="rounded-md border bg-white">
         <Table>
           <TableHeader>
             <TableRow>
@@ -87,7 +87,7 @@ export function CustomerClient({ data }: { data: Customer[] }) {
               data.map((customer) => (
                 <TableRow
                   key={customer.id}
-                  className="cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                  className="cursor-pointer hover:bg-neutral-100"
                   onClick={() => setSelectedCustomer(customer)}
                 >
                   <TableCell className="font-medium">{customer.name}</TableCell>

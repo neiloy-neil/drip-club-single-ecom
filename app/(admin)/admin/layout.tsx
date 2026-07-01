@@ -13,24 +13,35 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   }
 
   return (
-    <div className="flex min-h-screen w-full bg-muted/20">
-      {/* Sidebar */}
-      <aside className="hidden md:flex w-[240px] lg:w-[260px] shrink-0 flex-col border-r bg-background">
-        <div className="flex h-14 items-center border-b px-4 lg:h-[60px]">
-          <span className="flex items-center gap-2 font-bold text-base tracking-tight">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xs font-bold">D</span>
-            DRIP Admin
-          </span>
+    <div className="flex h-screen w-full overflow-hidden bg-slate-50">
+      {/* Sidebar — fixed height, only nav scrolls inside */}
+      <aside className="hidden md:flex w-[240px] lg:w-[260px] shrink-0 flex-col bg-slate-900 text-white overflow-hidden">
+        {/* Logo */}
+        <div className="flex h-[60px] shrink-0 items-center gap-3 px-5 border-b border-white/10">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500 text-slate-900 text-sm font-black">
+            D
+          </div>
+          <div className="leading-tight">
+            <div className="text-sm font-bold tracking-wider text-white">DRIP</div>
+            <div className="text-[10px] text-slate-400 font-medium tracking-widest uppercase">Admin Panel</div>
+          </div>
         </div>
-        <div className="flex-1 overflow-y-auto py-3 scrollbar-thin">
+
+        {/* Nav — scrolls independently */}
+        <div className="flex-1 overflow-y-auto py-4 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-white/10">
           <Sidebar />
+        </div>
+
+        {/* Bottom user hint */}
+        <div className="shrink-0 border-t border-white/10 px-5 py-3">
+          <p className="text-[11px] text-slate-500 truncate">{session.user.email}</p>
         </div>
       </aside>
 
-      {/* Main area */}
-      <div className="flex flex-1 flex-col min-w-0">
+      {/* Main column — topbar + scrollable content */}
+      <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
         <AdminTopbar email={session.user.email ?? ""} />
-        <main className="flex-1 p-6 lg:p-8">
+        <main className="flex-1 overflow-y-auto p-6 lg:p-8">
           {children}
         </main>
       </div>
