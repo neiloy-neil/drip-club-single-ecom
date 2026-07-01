@@ -20,6 +20,7 @@ export default async function ShopPage({
     sale?: string
     minPrice?: string
     maxPrice?: string
+    search?: string
   }>
 }) {
   const params = await searchParams
@@ -31,6 +32,7 @@ export default async function ShopPage({
   const saleOnly = params.sale === "true"
   const minPrice = params.minPrice || ""
   const maxPrice = params.maxPrice || ""
+  const search = params.search || ""
   const take = parseInt(params.take || "12")
 
   let orderBy: any = { createdAt: "desc" }
@@ -38,6 +40,13 @@ export default async function ShopPage({
   if (sort === "price-desc") orderBy = { price: "desc" }
 
   const where: any = { isActive: true }
+  if (search) {
+    where.OR = [
+      { name: { contains: search, mode: "insensitive" } },
+      { description: { contains: search, mode: "insensitive" } },
+      { tags: { contains: search, mode: "insensitive" } },
+    ]
+  }
   if (categoryId) where.categoryId = categoryId
   if (brandId) where.brandId = brandId
   if (saleOnly) where.comparePrice = { not: null }
@@ -70,16 +79,18 @@ export default async function ShopPage({
     products.map((p: any) => ({ id: p.id, categoryId: p.categoryId }))
   ).catch(() => new Map())
 
-  const current = { categoryId, brandId, size, color, sort, minPrice, maxPrice, sale: params.sale || "" }
+  const current = { categoryId, brandId, size, color, sort, minPrice, maxPrice, sale: params.sale || "", search }
 
   return (
     <div className="container mx-auto px-4 py-8 md:py-12 animate-in fade-in duration-500">
       {/* Top Bar */}
       <div className="flex flex-col md:flex-row md:items-end justify-between border-b border-drip-border pb-6 mb-8 gap-4">
         <div>
-          <h1 className="text-4xl md:text-5xl font-heading font-bold text-drip-black mb-2">Shop All</h1>
+          <h1 className="text-4xl md:text-5xl font-heading font-bold text-drip-black mb-2">
+            {search ? `"${search}"` : "Shop All"}
+          </h1>
           <p className="text-sm text-drip-text-muted">
-            Showing {products.length} of {totalProducts} products
+            {search ? `${totalProducts} result${totalProducts !== 1 ? "s" : ""}` : `Showing ${products.length} of ${totalProducts} products`}
           </p>
         </div>
 

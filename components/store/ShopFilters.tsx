@@ -19,6 +19,7 @@ type Props = {
     minPrice: string
     maxPrice: string
     sale: string
+    search?: string
   }
 }
 
@@ -52,6 +53,7 @@ export default function ShopFilters({ categories, brands, current }: Props) {
     if (base.minPrice) p.set("minPrice", base.minPrice)
     if (base.maxPrice) p.set("maxPrice", base.maxPrice)
     if (base.sale) p.set("sale", base.sale)
+    if (base.search) p.set("search", base.search)
     return `/shop?${p.toString()}`
   }
 

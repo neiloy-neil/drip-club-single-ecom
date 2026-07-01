@@ -1,27 +1,15 @@
 import { Card, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import prisma from "@/lib/prisma"
 import OrdersFilters from "./OrdersFilters"
 import OrdersBulkClient from "./OrdersBulkClient"
 import AdminPagination from "@/components/admin/AdminPagination"
 import { getCustomerRiskBatch } from "@/lib/customerRisk"
+import { Download } from "lucide-react"
+import Link from "next/link"
 
 const PAGE_SIZE = 20
 
-const STATUS_COLORS: Record<string, string> = {
-  PENDING: "bg-yellow-100 text-yellow-800 border-yellow-200",
-  CONFIRMED: "bg-blue-100 text-blue-800 border-blue-200",
-  PACKED: "bg-purple-100 text-purple-800 border-purple-200",
-  SHIPPED: "bg-indigo-100 text-indigo-800 border-indigo-200",
-  DELIVERED: "bg-green-100 text-green-800 border-green-200",
-  CANCELLED: "bg-red-100 text-red-800 border-red-200",
-  RETURNED: "bg-orange-100 text-orange-800 border-orange-200",
-}
-
-const RISK_COLORS: Record<string, string> = {
-  LOW: "bg-green-100 text-green-800 border-green-200",
-  MEDIUM: "bg-yellow-100 text-yellow-800 border-yellow-200",
-  HIGH: "bg-red-100 text-red-800 border-red-200",
-}
 
 export default async function OrdersPage({
   searchParams,
@@ -70,6 +58,11 @@ export default async function OrdersPage({
           Orders{" "}
           <span className="text-sm font-normal text-muted-foreground ml-2">{total} total</span>
         </h1>
+        <a href={`/api/admin/orders/export${status ? `?status=${status}` : ""}`}>
+          <Button variant="outline" className="gap-2">
+            <Download className="h-4 w-4" /> Export CSV
+          </Button>
+        </a>
       </div>
 
       <Card>
