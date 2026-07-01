@@ -115,25 +115,35 @@ model Product {
   price       Decimal
   comparePrice Decimal?
   categoryId  String
+  brandId     String?
   tags        String?
   isActive    Boolean  @default(true)
   isFeatured  Boolean  @default(false)
   isDigital   Boolean  @default(false)
-  downloadLimit     Int?     // max downloads per purchase (null = unlimited)
-  downloadExpireHours Int?   // hours until signed URL expires (null = never)
+  downloadLimit     Int?
+  downloadExpireHours Int?
+  minQty      Int?     // minimum order quantity
+  maxQty      Int?     // maximum per order
+  stepQty     Int?     // must buy in multiples of stepQty
+  weight      Decimal? // grams, for shipping rate lookup
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   category       Category         @relation(fields: [categoryId], references: [id])
+  brand          Brand?           @relation(fields: [brandId], references: [id])
   images         ProductImage[]
   variants       ProductVariant[]
   orderItems     OrderItem[]
   reviews        Review[]
   flashSales     FlashSale[]
   digitalAssets  DigitalAsset[]
-  bundleItems    BundleItem[]     // this product appears in these bundles
+  bundleItems    BundleItem[]
   blogPosts      BlogPostProduct[]
   wishlists      WishlistItem[]
+  addons         ProductAddon[]
+  orderBumps     OrderBump[]
+  reviewQAs      ReviewQA[]
+  priceRules     PriceRule[]
 
   @@map("products")
 }
@@ -153,13 +163,15 @@ model ProductImage {
 model ProductVariant {
   id        String  @id @default(cuid())
   productId String
-  size      String  // S, M, L, XL, XXL
-  color     String  // Red, Black, White, etc.
-  colorHex  String? // #FF0000
+  size      String
+  color     String
+  colorHex  String?
   sku       String  @unique
   stock     Int     @default(0)
-  price     Decimal?  // override product price if different
-  costPrice Decimal @default(0) // current cost basis, updated when a PO is received
+  price     Decimal?
+  costPrice Decimal @default(0)
+  minQty    Int?    // variant-level override
+  maxQty    Int?
 
   product            Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
   orderItems         OrderItem[]
@@ -487,16 +499,18 @@ enum LoyaltyPointType {
 // ─────────────────────────────────────────────
 
 model Review {
-  id        String   @id @default(cuid())
-  userId    String
-  productId String
-  rating    Int      // 1–5
-  comment   String?
-  isApproved Boolean @default(false)
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  userId     String
+  productId  String
+  rating     Int
+  comment    String?
+  isApproved Boolean  @default(false)
+  helpful    Int      @default(0) // upvote count
+  createdAt  DateTime @default(now())
 
-  user    User    @relation(fields: [userId], references: [id])
-  product Product @relation(fields: [productId], references: [id])
+  user    User          @relation(fields: [userId], references: [id])
+  product Product       @relation(fields: [productId], references: [id])
+  media   ReviewMedia[]
 
   @@unique([userId, productId])
   @@map("reviews")
@@ -1180,13 +1194,222 @@ model MarketingSubscriber {
   id         String   @id @default(cuid())
   email      String   @unique
   name       String?
-  provider   String   // "mailchimp" | "klaviyo"
+  provider   String
   listId     String?
-  status     String   @default("subscribed") // subscribed | unsubscribed
+  status     String   @default("subscribed")
   syncedAt   DateTime?
   tags       Json     @default("[]")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
   @@map("marketing_subscribers")
+}
+
+// ─────────────────────────────────────────────
+// BRANDS (E2)
+// ─────────────────────────────────────────────
+
+model Brand {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  slug        String    @unique
+  logo        String?
+  banner      String?
+  description String?
+  website     String?
+  isActive    Boolean   @default(true)
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  products Product[]
+
+  @@map("brands")
+}
+
+// ─────────────────────────────────────────────
+// PRODUCT ADD-ONS (E1)
+// ─────────────────────────────────────────────
+
+enum AddonType {
+  TEXT
+  TEXTAREA
+  SELECT
+  CHECKBOX
+  COLOR
+  FILE
+}
+
+model ProductAddon {
+  id            String    @id @default(cuid())
+  productId     String
+  label         String
+  type          AddonType @default(TEXT)
+  options       Json      @default("[]") // [{label, value, hex?, priceModifier}]
+  priceModifier Decimal   @default(0)    // flat add to price for non-SELECT types
+  isRequired    Boolean   @default(false)
+  sortOrder     Int       @default(0)
+  createdAt     DateTime  @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("product_addons")
+}
+
+// ─────────────────────────────────────────────
+// DYNAMIC / ROLE-BASED PRICING (E4)
+// ─────────────────────────────────────────────
+
+enum PriceRuleType {
+  TAG_DISCOUNT      // customer has tag X → get Y% off
+  QTY_TIER          // buy N+ units → get Y% off
+  MEMBER_PRICE      // membership plan members get flat price
+}
+
+model PriceRule {
+  id            String        @id @default(cuid())
+  name          String
+  type          PriceRuleType
+  productId     String?       // null = applies sitewide
+  tagName       String?       // for TAG_DISCOUNT
+  minQty        Int?          // for QTY_TIER
+  discountType  DiscountType  @default(PERCENTAGE)
+  discountValue Decimal
+  isActive      Boolean       @default(true)
+  startsAt      DateTime?
+  endsAt        DateTime?
+  createdAt     DateTime      @default(now())
+
+  product Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("price_rules")
+}
+
+// ─────────────────────────────────────────────
+// ORDER BUMPS / UPSELLS (E5)
+// ─────────────────────────────────────────────
+
+model OrderBump {
+  id               String   @id @default(cuid())
+  productId        String
+  headline         String   // "Add matching socks for only ৳150!"
+  description      String?
+  discountPct      Decimal  @default(0)
+  triggerMinTotal  Decimal? // show only when cart >= this amount
+  isActive         Boolean  @default(true)
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("order_bumps")
+}
+
+// ─────────────────────────────────────────────
+// CHECKOUT CUSTOM FIELDS (E6)
+// ─────────────────────────────────────────────
+
+enum CheckoutFieldType {
+  TEXT
+  TEXTAREA
+  SELECT
+  CHECKBOX
+  DATE
+}
+
+model CheckoutField {
+  id          String            @id @default(cuid())
+  label       String
+  placeholder String?
+  type        CheckoutFieldType @default(TEXT)
+  options     Json              @default("[]") // for SELECT type
+  isRequired  Boolean           @default(false)
+  step        Int               @default(1) // checkout step to show on
+  sortOrder   Int               @default(0)
+  isActive    Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+
+  @@map("checkout_fields")
+}
+
+// ─────────────────────────────────────────────
+// REVIEW MEDIA & Q&A (E8)
+// ─────────────────────────────────────────────
+
+model ReviewMedia {
+  id        String   @id @default(cuid())
+  reviewId  String
+  url       String
+  type      String   @default("IMAGE") // IMAGE | VIDEO
+  createdAt DateTime @default(now())
+
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@map("review_media")
+}
+
+model ReviewQA {
+  id          String   @id @default(cuid())
+  productId   String
+  userId      String?
+  guestName   String?
+  guestEmail  String?
+  question    String
+  answer      String?
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  answeredAt  DateTime?
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("review_qas")
+}
+
+// ─────────────────────────────────────────────
+// MEMBERSHIPS (E11)
+// ─────────────────────────────────────────────
+
+enum MembershipBillingCycle {
+  MONTHLY
+  YEARLY
+  LIFETIME
+}
+
+model MembershipPlan {
+  id               String                 @id @default(cuid())
+  name             String
+  slug             String                 @unique
+  description      String?
+  price            Decimal
+  billingCycle     MembershipBillingCycle @default(MONTHLY)
+  discountPct      Decimal                @default(0)  // % off all products
+  freeShipping     Boolean                @default(false)
+  exclusiveAccess  Boolean                @default(false)
+  benefits         Json                   @default("[]") // ["Free shipping", "10% off", ...]
+  isActive         Boolean                @default(true)
+  sortOrder        Int                    @default(0)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  subscriptions MembershipSubscription[]
+
+  @@map("membership_plans")
+}
+
+model MembershipSubscription {
+  id        String    @id @default(cuid())
+  userId    String
+  planId    String
+  status    String    @default("ACTIVE") // ACTIVE | CANCELLED | EXPIRED
+  startedAt DateTime  @default(now())
+  expiresAt DateTime?
+  cancelledAt DateTime?
+  autoRenew Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  plan MembershipPlan @relation(fields: [planId], references: [id])
+
+  @@index([userId])
+  @@map("membership_subscriptions")
 }
