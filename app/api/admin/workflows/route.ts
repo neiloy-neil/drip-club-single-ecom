@@ -3,6 +3,8 @@ import prisma from "@/lib/prisma"
 import { requireAdmin } from "@/lib/auth"
 
 export async function GET() {
+  const session = await requireAdmin()
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   const workflows = await prisma.workflow.findMany({
     include: { _count: { select: { runs: true } } },
     orderBy: { createdAt: "desc" },
