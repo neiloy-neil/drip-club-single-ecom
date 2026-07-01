@@ -35,6 +35,9 @@ export function CouponClient({ data }: { data: Coupon[] }) {
   const [minOrder, setMinOrder] = useState("")
   const [maxUses, setMaxUses] = useState("")
   const [expiresAt, setExpiresAt] = useState("")
+  const [bogoEnabled, setBogoEnabled] = useState(false)
+  const [buyQty, setBuyQty] = useState("2")
+  const [getQty, setGetQty] = useState("1")
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -44,22 +47,30 @@ export function CouponClient({ data }: { data: Coupon[] }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           code,
-          type,
-          value: parseFloat(value),
+          type: bogoEnabled ? "FLAT" : type,
+          value: bogoEnabled ? 0 : parseFloat(value),
           minOrderAmount: minOrder ? parseFloat(minOrder) : null,
           maxUses: maxUses ? parseInt(maxUses) : null,
           expiresAt: expiresAt || null,
         }),
       })
-      if (res.ok) {
-        toast.success("Coupon created successfully")
-        setIsDialogOpen(false)
-        setCode(""); setValue(""); setMinOrder(""); setMaxUses(""); setExpiresAt("")
-        router.refresh()
-      } else {
-        const d = await res.json()
-        toast.error(d.error || "Failed to create coupon")
+      const couponData = await res.json()
+      if (!res.ok) {
+        toast.error(couponData.error || "Failed to create coupon")
+        return
       }
+      if (bogoEnabled && couponData.id) {
+        await fetch("/api/admin/coupon-rules", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ couponId: couponData.id, ruleType: "BOGO", buyQty: parseInt(buyQty), getQty: parseInt(getQty) }),
+        })
+      }
+      toast.success("Coupon created successfully")
+      setIsDialogOpen(false)
+      setCode(""); setValue(""); setMinOrder(""); setMaxUses(""); setExpiresAt("")
+      setBogoEnabled(false); setBuyQty("2"); setGetQty("1")
+      router.refresh()
     } catch {
       toast.error("Error creating coupon")
     }
@@ -111,20 +122,42 @@ export function CouponClient({ data }: { data: Coupon[] }) {
               <label className="text-sm font-medium text-neutral-700">Code</label>
               <Input required value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="e.g. SUMMER50" />
             </div>
-            <div>
-              <label className="text-sm font-medium text-neutral-700">Type</label>
-              <Select value={type} onValueChange={(val) => setType(val || "PERCENTAGE")}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="PERCENTAGE">Percentage (%)</SelectItem>
-                  <SelectItem value="FLAT">Flat Amount (৳)</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="flex items-center gap-3 p-3 border rounded-lg">
+              <input type="checkbox" id="bogo" checked={bogoEnabled} onChange={e => setBogoEnabled(e.target.checked)} className="w-4 h-4" />
+              <label htmlFor="bogo" className="text-sm font-medium text-neutral-700 cursor-pointer">
+                BOGO — Buy X Get Y Free
+              </label>
             </div>
-            <div>
-              <label className="text-sm font-medium text-neutral-700">Value</label>
-              <Input required type="number" min="0" step="0.01" value={value} onChange={(e) => setValue(e.target.value)} />
-            </div>
+            {bogoEnabled ? (
+              <div className="grid grid-cols-2 gap-3 p-3 bg-neutral-50 rounded-lg border">
+                <div>
+                  <label className="text-xs font-medium text-neutral-600">Buy Qty (X)</label>
+                  <Input type="number" min="1" value={buyQty} onChange={e => setBuyQty(e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-neutral-600">Get Qty Free (Y)</label>
+                  <Input type="number" min="1" value={getQty} onChange={e => setGetQty(e.target.value)} />
+                </div>
+                <p className="col-span-2 text-xs text-neutral-500">Cheapest item(s) in cart become free per qualifying group.</p>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="text-sm font-medium text-neutral-700">Type</label>
+                  <Select value={type} onValueChange={(val) => setType(val || "PERCENTAGE")}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PERCENTAGE">Percentage (%)</SelectItem>
+                      <SelectItem value="FLAT">Flat Amount (৳)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-neutral-700">Value</label>
+                  <Input required type="number" min="0" step="0.01" value={value} onChange={(e) => setValue(e.target.value)} />
+                </div>
+              </>
+            )}
             <div>
               <label className="text-sm font-medium text-neutral-700">Min Order Amount (Optional)</label>
               <Input type="number" min="0" value={minOrder} onChange={(e) => setMinOrder(e.target.value)} />

@@ -15,7 +15,8 @@ export async function POST(req: Request) {
     const body = await req.json()
     const { items, address, paymentMethod, subtotal, shippingCharge, total, userId,
       note, giftWrap, giftMessage, giftWrapCharge, isGuest, guestEmail,
-      loyaltyPointsRedeemed, loyaltyDiscount, storeCreditRedeemed, customFields } = body
+      loyaltyPointsRedeemed, loyaltyDiscount, storeCreditRedeemed, customFields,
+      couponId, couponDiscount: clientCouponDiscount, deliveryDate } = body
 
     if (!items?.length || !address || !paymentMethod) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
@@ -78,6 +79,43 @@ export async function POST(req: Request) {
     const giftWrapSetting = giftWrap ? await prisma.setting.findUnique({ where: { key: "gift_wrap_charge" } }) : null
     const serverGiftWrapCharge = giftWrap ? Number(giftWrapSetting?.value || giftWrapCharge || 50) : 0
 
+    // Validate coupon server-side
+    let serverCouponDiscount = 0
+    let validatedCouponId: string | null = null
+    if (couponId) {
+      const coupon = await prisma.coupon.findUnique({
+        where: { id: couponId },
+        include: { rule: true },
+      })
+      if (coupon && coupon.isActive &&
+        !(coupon.expiresAt && new Date(coupon.expiresAt) < new Date()) &&
+        !(coupon.maxUses && coupon.usedCount >= coupon.maxUses)) {
+        const rule = coupon.rule
+        if (rule?.ruleType === "BOGO") {
+          const buyQty = rule.buyQty ?? 1
+          const getQty = rule.getQty ?? 1
+          const units: number[] = []
+          for (const item of items) {
+            for (let i = 0; i < (item.quantity || 1); i++) {
+              units.push(Number(variantMap[item.variantId].product.price))
+            }
+          }
+          units.sort((a: number, b: number) => a - b)
+          const freeGroups = Math.floor(units.length / (buyQty + getQty))
+          const freeCount = freeGroups * getQty
+          serverCouponDiscount = units.slice(0, freeCount).reduce((s: number, p: number) => s + p, 0)
+        } else if (coupon.type === "PERCENTAGE") {
+          serverCouponDiscount = Math.round((serverSubtotal * Number(coupon.value)) / 100)
+          if (rule?.maxDiscount) serverCouponDiscount = Math.min(serverCouponDiscount, Number(rule.maxDiscount))
+        } else if (coupon.type === "FLAT") {
+          serverCouponDiscount = Math.min(Number(coupon.value), serverSubtotal)
+        }
+        // Cap at what the client claimed (prevents double-discount exploitation)
+        serverCouponDiscount = Math.min(serverCouponDiscount, clientCouponDiscount || 0)
+        validatedCouponId = coupon.id
+      }
+    }
+
     // Auto discount (bulk/tiered) — server-side validation, never trust client
     const cartItems = items.map((item: any) => ({
       variantId: item.variantId,
@@ -105,7 +143,7 @@ export async function POST(req: Request) {
       serverCreditDiscount = Math.min(storeCreditRedeemed, Number(credit?.balance ?? 0))
     }
 
-    const serverTotal = Math.max(0, serverSubtotal + serverShippingCharge + serverTaxAmount + serverGiftWrapCharge - autoDiscountAmount - serverLoyaltyDiscount - serverCreditDiscount)
+    const serverTotal = Math.max(0, serverSubtotal + serverShippingCharge + serverTaxAmount + serverGiftWrapCharge - autoDiscountAmount - serverLoyaltyDiscount - serverCreditDiscount - serverCouponDiscount)
 
     const order = await prisma.$transaction(async (tx) => {
       // Re-check stock inside transaction to prevent race conditions
@@ -136,7 +174,9 @@ export async function POST(req: Request) {
           total: serverTotal,
           subtotal: serverSubtotal,
           shippingCharge: serverShippingCharge,
-          discount: Math.max(0, autoDiscountAmount),
+          discount: Math.max(0, autoDiscountAmount + serverCouponDiscount),
+          couponId: validatedCouponId || null,
+          deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
           note: note || null,
           giftWrap: giftWrap || false,
           giftMessage: giftWrap ? (giftMessage || null) : null,
@@ -164,6 +204,11 @@ export async function POST(req: Request) {
     })
 
     await logAudit({ action: "order.created", entityType: "Order", entityId: order.id, after: { orderNumber: order.orderNumber, total: serverTotal, paymentMethod } })
+
+    // Increment coupon usage count
+    if (validatedCouponId) {
+      prisma.coupon.update({ where: { id: validatedCouponId }, data: { usedCount: { increment: 1 } } }).catch(() => {})
+    }
 
     // Deduct loyalty points used
     if (userId && serverLoyaltyDiscount > 0) {

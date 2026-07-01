@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useCartStore } from "@/store/useCartStore"
 import { useRouter } from "next/navigation"
-import { MapPin, CreditCard, ClipboardCheck, ChevronRight, Check, Gift, MessageSquare, User, Star, Wallet } from "lucide-react"
+import { MapPin, CreditCard, ClipboardCheck, ChevronRight, Check, Gift, MessageSquare, User, Star, Wallet, Tag, Calendar } from "lucide-react"
 
 type CheckoutField = {
   id: string
@@ -77,13 +77,47 @@ export default function CheckoutForm({
   // Custom checkout fields (keyed by field id)
   const [customFields, setCustomFields] = useState<Record<string, string>>({})
 
+  // Coupon
+  const [couponCode, setCouponCode] = useState("")
+  const [appliedCoupon, setAppliedCoupon] = useState<{ couponId: string; couponCode: string; discount: number; message: string } | null>(null)
+  const [couponError, setCouponError] = useState("")
+  const [couponLoading, setCouponLoading] = useState(false)
+
+  // Delivery date
+  const [deliveryDate, setDeliveryDate] = useState("")
+
   const subtotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0)
   const shippingCharge = subtotal >= freeShippingThreshold ? 0 : shippingChargeAmount
   const taxAmount = taxEnabled ? Math.round((subtotal * taxRate) / 100) : 0
   const giftWrapAmount = giftWrap ? giftWrapCharge : 0
   const loyaltyDiscount = redeemPoints ? Math.min(pointsToRedeem, loyaltyMaxDiscount) : 0
   const creditDiscount = redeemCredit ? Math.min(creditToRedeem, storeCreditBalance) : 0
-  const total = Math.max(0, subtotal + shippingCharge + taxAmount + giftWrapAmount - loyaltyDiscount - creditDiscount)
+  const couponDiscount = appliedCoupon?.discount ?? 0
+  const total = Math.max(0, subtotal + shippingCharge + taxAmount + giftWrapAmount - loyaltyDiscount - creditDiscount - couponDiscount)
+
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) return
+    setCouponLoading(true)
+    setCouponError("")
+    try {
+      const res = await fetch("/api/store/apply-coupon", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: couponCode, items }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setCouponError(data.error); setAppliedCoupon(null) }
+      else setAppliedCoupon(data)
+    } catch { setCouponError("Failed to apply coupon") }
+    finally { setCouponLoading(false) }
+  }
+
+  const minDeliveryDate = (() => {
+    const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().split("T")[0]
+  })()
+  const maxDeliveryDate = (() => {
+    const d = new Date(); d.setDate(d.getDate() + 8); return d.toISOString().split("T")[0]
+  })()
 
   const handleSubmitStep1 = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -127,6 +161,9 @@ export default function CheckoutForm({
           loyaltyDiscount,
           storeCreditRedeemed: redeemCredit ? creditDiscount : 0,
           customFields: Object.keys(customFields).length > 0 ? customFields : null,
+          couponId: appliedCoupon?.couponId || null,
+          couponDiscount,
+          deliveryDate: deliveryDate || null,
         }),
       })
       const orderData = await orderRes.json()
@@ -324,6 +361,22 @@ export default function CheckoutForm({
                     </div>
                   </label>
                 )}
+                {/* Preferred delivery date */}
+                <div className="border border-drip-border rounded-xl p-4 space-y-3">
+                  <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-drip-text-muted">
+                    <Calendar className="w-4 h-4" /> Preferred Delivery Date (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    value={deliveryDate}
+                    min={minDeliveryDate}
+                    max={maxDeliveryDate}
+                    onChange={e => setDeliveryDate(e.target.value)}
+                    className={inputCls}
+                  />
+                  <p className="text-xs text-drip-text-muted">We will try our best to deliver by your preferred date.</p>
+                </div>
+
                 <div className="pt-4 flex justify-end">
                   <button type="submit" className="px-8 py-4 bg-drip-black text-white font-bold uppercase tracking-widest flex items-center gap-2 hover:bg-drip-gold transition-colors rounded-full text-xs">
                     Continue <ChevronRight className="w-4 h-4" />
@@ -333,10 +386,13 @@ export default function CheckoutForm({
             </div>
           )}
           {step > 2 && (
-            <div className="p-6 text-sm">
+            <div className="p-6 text-sm space-y-1">
               <span className="font-bold text-drip-black bg-drip-muted px-3 py-1 rounded">
                 {paymentMethod === "COD" ? "Cash on Delivery" : paymentMethod}
               </span>
+              {deliveryDate && (
+                <p className="text-xs text-drip-text-muted pt-2">Preferred delivery: {new Date(deliveryDate + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</p>
+              )}
             </div>
           )}
         </div>
@@ -447,6 +503,44 @@ export default function CheckoutForm({
                 </div>
               )}
 
+              {/* Coupon code */}
+              <div className="border border-drip-border rounded-xl p-4 space-y-3">
+                <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-drip-text-muted">
+                  <Tag className="w-4 h-4" /> Coupon Code
+                </label>
+                {appliedCoupon ? (
+                  <div className="flex items-center justify-between bg-drip-success/10 border border-drip-success/30 rounded-lg px-4 py-3">
+                    <div>
+                      <p className="font-bold text-sm text-drip-success">{appliedCoupon.couponCode}</p>
+                      <p className="text-xs text-drip-text-muted">{appliedCoupon.message}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setAppliedCoupon(null); setCouponCode("") }}
+                      className="text-xs font-bold text-red-500 hover:text-red-700 uppercase tracking-widest"
+                    >Remove</button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={couponCode}
+                      onChange={e => { setCouponCode(e.target.value.toUpperCase()); setCouponError("") }}
+                      placeholder="Enter coupon code"
+                      className={`${inputCls} flex-1`}
+                      onKeyDown={e => e.key === "Enter" && handleApplyCoupon()}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyCoupon}
+                      disabled={couponLoading || !couponCode.trim()}
+                      className="px-5 py-3 bg-drip-black text-white text-xs font-bold uppercase tracking-widest rounded-lg hover:bg-drip-gold transition-colors disabled:opacity-50 whitespace-nowrap"
+                    >{couponLoading ? "..." : "Apply"}</button>
+                  </div>
+                )}
+                {couponError && <p className="text-xs text-red-500">{couponError}</p>}
+              </div>
+
               {/* Order note */}
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-drip-text-muted">
@@ -555,6 +649,12 @@ export default function CheckoutForm({
               <div className="flex justify-between text-drip-text-muted">
                 <span>Store Credit</span>
                 <span className="font-mono text-drip-success">−৳{creditDiscount.toLocaleString()}</span>
+              </div>
+            )}
+            {couponDiscount > 0 && (
+              <div className="flex justify-between text-drip-text-muted">
+                <span>Coupon ({appliedCoupon?.couponCode})</span>
+                <span className="font-mono text-drip-success">−৳{couponDiscount.toLocaleString()}</span>
               </div>
             )}
             <div className="flex justify-between border-t border-drip-border pt-4 font-bold text-lg items-center">
