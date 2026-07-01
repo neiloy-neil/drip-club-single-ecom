@@ -7,8 +7,8 @@ type Addon = {
   id: string
   label: string
   type: string
-  options: { label: string; value: string; priceModifier?: number }[]
-  priceModifier: number
+  options: any
+  priceModifier: number | string
   isRequired: boolean
 }
 
