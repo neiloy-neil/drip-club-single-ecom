@@ -74,7 +74,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   // Award 10 loyalty points for first-time review
   if (isNew) {
     await prisma.loyaltyPoint.create({
-      data: { userId: session.user.id, points: 10, type: "EARNED", note: "Review reward" },
+      data: { userId: session.user.id, points: 10, type: "EARNED", description: "Review reward" },
     }).catch(() => {})
   }
 

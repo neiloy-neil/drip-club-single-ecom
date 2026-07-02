@@ -249,7 +249,7 @@ export async function POST(req: Request) {
     if (validatedGiftCard && serverGiftCardDiscount > 0) {
       prisma.giftCard.update({
         where: { id: validatedGiftCard.id },
-        data: { balance: { decrement: serverGiftCardDiscount }, usedCount: { increment: 1 } },
+        data: { balance: { decrement: serverGiftCardDiscount } },
       }).catch(() => {})
       prisma.giftCardTransaction.create({
         data: { giftCardId: validatedGiftCard.id, amount: serverGiftCardDiscount, type: "REDEEM", orderId: order.id },

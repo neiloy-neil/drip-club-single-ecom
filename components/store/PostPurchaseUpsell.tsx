@@ -47,14 +47,16 @@ export default function PostPurchaseUpsell({ orderTotal }: { orderTotal: number 
   const handleAdd = () => {
     if (!defaultVariant) return
     addItem({
+      id: defaultVariant.id,
       variantId: defaultVariant.id,
       productId: bump.product.id,
+      productSlug: bump.product.slug,
       name: bump.product.name,
-      slug: bump.product.slug,
       size: defaultVariant.size,
       color: defaultVariant.color,
       price: discountedPrice,
-      image: bump.product.images[0]?.url || null,
+      image: bump.product.images[0]?.url || "",
+      quantity: 1,
     })
     setAdded(true)
     toast.success("Added to your next order!")
