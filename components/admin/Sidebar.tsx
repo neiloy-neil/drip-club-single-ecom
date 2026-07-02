@@ -10,7 +10,7 @@ import {
   Zap, Percent, Tag, RotateCcw, Globe, Link2, MapPin, Layers, ScrollText,
   ShoppingBasket, Upload, CreditCard, Workflow, Wallet, Award, TrendingUp,
   Sliders, ChevronRight, Crown, Calendar, Warehouse, Download, LineChart, PieChart,
-  Search, ChevronDown,
+  Search, ChevronDown, Mail, MessageSquare, Filter, Sparkles, TrendingDown,
 } from "lucide-react"
 
 type NavItem = { href: string; icon: any; label: string }
@@ -27,6 +27,7 @@ const navGroups: NavGroup[] = [
       { href: "/admin/bundles", icon: Layers, label: "Bundles" },
       { href: "/admin/inventory", icon: Package, label: "Inventory" },
       { href: "/admin/products/import", icon: Upload, label: "Import CSV" },
+      { href: "/admin/smart-collections", icon: Sparkles, label: "Collections" },
     ],
   },
   {
@@ -61,6 +62,7 @@ const navGroups: NavGroup[] = [
       { href: "/admin/gift-cards", icon: CreditCard, label: "Gift Cards" },
       { href: "/admin/order-bumps", icon: ChevronRight, label: "Order Bumps" },
       { href: "/admin/workflows", icon: Workflow, label: "Workflows" },
+      { href: "/admin/campaigns", icon: Mail, label: "Campaigns" },
     ],
   },
   {
@@ -104,6 +106,8 @@ const navGroups: NavGroup[] = [
       { href: "/admin/reports", icon: BarChart, label: "Reports" },
       { href: "/admin/analytics/products", icon: LineChart, label: "Product Analytics" },
       { href: "/admin/analytics/cohorts", icon: PieChart, label: "Cohort & LTV" },
+      { href: "/admin/analytics/search", icon: Search, label: "Search Analytics" },
+      { href: "/admin/analytics/funnel", icon: Filter, label: "Funnel" },
       { href: "/admin/export", icon: Download, label: "Export Data" },
     ],
   },

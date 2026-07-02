@@ -127,6 +127,9 @@ model Product {
   maxQty      Int?     // maximum per order
   stepQty     Int?     // must buy in multiples of stepQty
   weight      Decimal? // grams, for shipping rate lookup
+  metaTitle     String?
+  metaDescription String?
+  ogImage       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -146,6 +149,9 @@ model Product {
   reviewQAs           ReviewQA[]
   priceRules          PriceRule[]
   subscriptionPlans   SubscriptionPlan[]
+  frequentlyBoughtTogether FrequentlyBoughtTogether[] @relation("FBTSource")
+  fbtRelated               FrequentlyBoughtTogether[] @relation("FBTRelated")
+  productTags    ProductTag[]     @relation("ProductTags")
 
   @@map("products")
 }
@@ -156,6 +162,8 @@ model ProductImage {
   url       String
   alt       String?
   sortOrder Int     @default(0)
+  videoUrl  String?
+  isVideo   Boolean @default(false)
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
@@ -252,6 +260,8 @@ model Order {
   shippingDistrict String
   shippingDivision String
 
+  tags        String[]       @default([])
+
   user        User?          @relation(fields: [userId], references: [id])
   address     Address?       @relation(fields: [addressId], references: [id])
   coupon      Coupon?        @relation(fields: [couponId], references: [id])
@@ -262,6 +272,7 @@ model Order {
   statusLogs  OrderStatusLog[]
   returnRequests ReturnRequest[]
   affiliateConversions AffiliateConversion[]
+  messages    OrderMessage[]
 
   @@map("orders")
 }
@@ -300,6 +311,7 @@ model OrderStatusLog {
 }
 
 enum OrderStatus {
+  DRAFT         // draft order / quote
   PENDING       // just placed
   CONFIRMED     // admin confirmed
   PACKED        // ready to ship
@@ -1607,3 +1619,145 @@ model ShippingLabel {
   @@index([orderId])
   @@map("shipping_labels")
 }
+
+// ─────────────────────────────────────────────
+// FREQUENTLY BOUGHT TOGETHER (Feature 4)
+// ─────────────────────────────────────────────
+
+model FrequentlyBoughtTogether {
+  id          String   @id @default(cuid())
+  productId   String
+  relatedId   String
+  sortOrder   Int      @default(0)
+  product     Product  @relation("FBTSource", fields: [productId], references: [id], onDelete: Cascade)
+  related     Product  @relation("FBTRelated", fields: [relatedId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  @@unique([productId, relatedId])
+  @@map("frequently_bought_together")
+}
+
+// ─────────────────────────────────────────────
+// PRODUCT TAGS & SMART COLLECTIONS (Feature 6)
+// ─────────────────────────────────────────────
+
+model ProductTag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  products  Product[] @relation("ProductTags")
+
+  @@map("product_tags")
+}
+
+model SmartCollection {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  image       String?
+  rules       Json     // [{ field: "price"|"tag"|"category"|"vendor", operator: "less_than"|"greater_than"|"equals"|"contains", value: string }]
+  ruleMatch   String   @default("all") // "all" | "any"
+  sortBy      String   @default("created_desc")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("smart_collections")
+}
+
+// ─────────────────────────────────────────────
+// ORDER MESSAGES (Feature 10)
+// ─────────────────────────────────────────────
+
+model OrderMessage {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fromAdmin Boolean  @default(false)
+  message   String
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@map("order_messages")
+}
+
+// ─────────────────────────────────────────────
+// SEARCH ANALYTICS (Feature 12)
+// ─────────────────────────────────────────────
+
+model SearchAnalytic {
+  id          String   @id @default(cuid())
+  query       String
+  resultsCount Int
+  clicked     Boolean  @default(false)
+  clickedSlug String?
+  userId      String?
+  sessionId   String?
+  createdAt   DateTime @default(now())
+
+  @@index([query])
+  @@index([createdAt])
+  @@map("search_analytics")
+}
+
+// ─────────────────────────────────────────────
+// FUNNEL EVENTS (Feature 13)
+// ─────────────────────────────────────────────
+
+model FunnelEvent {
+  id        String   @id @default(cuid())
+  event     String   // "product_view" | "add_to_cart" | "checkout_start" | "checkout_complete"
+  productId String?
+  orderId   String?
+  userId    String?
+  sessionId String
+  value     Float?
+  createdAt DateTime @default(now())
+
+  @@index([event])
+  @@index([createdAt])
+  @@map("funnel_events")
+}
+
+// ─────────────────────────────────────────────
+// EMAIL CAMPAIGNS (Feature 14)
+// ─────────────────────────────────────────────
+
+model EmailCampaign {
+  id            String   @id @default(cuid())
+  name          String
+  subject       String
+  previewText   String?
+  bodyHtml      String   @db.Text
+  status        String   @default("DRAFT") // DRAFT | SCHEDULED | SENDING | SENT | CANCELLED
+  scheduledAt   DateTime?
+  sentAt        DateTime?
+  recipientType String   @default("ALL") // ALL | CUSTOMERS | VIP | TAG:xxx | MEMBERS
+  totalSent     Int      @default(0)
+  totalOpened   Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("email_campaigns")
+}
+
+// ─────────────────────────────────────────────
+// SMS LOG (Feature 15)
+// ─────────────────────────────────────────────
+
+model SmsLog {
+  id        String   @id @default(cuid())
+  phone     String
+  message   String
+  event     String
+  status    String   @default("SENT")
+  provider  String   @default("twilio")
+  createdAt DateTime @default(now())
+
+  @@map("sms_logs")
+}
+
+// ─────────────────────────────────────────────
+// FBT RELATED (back-reference on Product)
+// ─────────────────────────────────────────────
+// Note: FBTRelated is handled via FrequentlyBoughtTogether.related relation above
+

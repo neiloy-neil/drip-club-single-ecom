@@ -1,5 +1,8 @@
 import prisma from "@/lib/prisma"
 import { CustomerClient } from "./CustomerClient"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Upload } from "lucide-react"
 
 export default async function CustomersPage({
   searchParams,
@@ -117,6 +120,9 @@ export default async function CustomersPage({
             {registeredCustomers.length} registered · {guestCustomers.length} guests
           </p>
         </div>
+        <Link href="/admin/customers/import">
+          <Button variant="outline" size="sm"><Upload className="w-4 h-4 mr-2" /> Import CSV</Button>
+        </Link>
       </div>
       <CustomerClient data={customers} />
     </div>

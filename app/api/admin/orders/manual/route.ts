@@ -12,9 +12,12 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json()
-    const { items, address, paymentMethod, shippingCharge, note, markPaid } = body
+    const { items, address, paymentMethod, shippingCharge, note, markPaid, asDraft } = body
 
-    if (!items?.length || !address?.name || !address?.phone) {
+    if (!items?.length) {
+      return NextResponse.json({ error: "At least one item is required" }, { status: 400 })
+    }
+    if (!asDraft && (!address?.name || !address?.phone)) {
       return NextResponse.json({ error: "Items and customer name/phone are required" }, { status: 400 })
     }
 
@@ -45,15 +48,17 @@ export async function POST(req: Request) {
     const total = subtotal + shipping
 
     const order = await prisma.$transaction(async (tx) => {
-      for (const item of items) {
-        const variant = await tx.productVariant.findUnique({ where: { id: item.variantId } })
-        if (!variant || variant.stock < item.quantity) {
-          throw new Error(`Insufficient stock for item: ${item.name} (${item.size})`)
+      if (!asDraft) {
+        for (const item of items) {
+          const variant = await tx.productVariant.findUnique({ where: { id: item.variantId } })
+          if (!variant || variant.stock < item.quantity) {
+            throw new Error(`Insufficient stock for item: ${item.name} (${item.size})`)
+          }
+          await tx.productVariant.update({
+            where: { id: item.variantId },
+            data: { stock: { decrement: item.quantity } },
+          })
         }
-        await tx.productVariant.update({
-          where: { id: item.variantId },
-          data: { stock: { decrement: item.quantity } },
-        })
       }
 
       const orderCount = await tx.order.count()
@@ -62,7 +67,7 @@ export async function POST(req: Request) {
       const created = await tx.order.create({
         data: {
           orderNumber,
-          status: "CONFIRMED", // admin already confirmed this with the customer directly
+          status: asDraft ? "DRAFT" : "CONFIRMED", // DRAFT for quotes, CONFIRMED for live orders
           paymentStatus: markPaid ? "PAID" : "UNPAID",
           paymentMethod: paymentMethod || "COD",
           total,
@@ -91,7 +96,7 @@ export async function POST(req: Request) {
       })
 
       await tx.orderStatusLog.create({
-        data: { orderId: created.id, status: "CONFIRMED", note: "Created manually by admin" },
+        data: { orderId: created.id, status: asDraft ? "DRAFT" : "CONFIRMED", note: asDraft ? "Saved as draft" : "Created manually by admin" },
       })
 
       return created

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { requireAdmin } from "@/lib/adminAuth"
 import { sendOrderStatusUpdate, sendShippingDispatched } from "@/lib/email"
+import { sendSms, smsTemplates } from "@/lib/sms"
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { error } = await requireAdmin()
@@ -53,6 +54,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             note: body.note,
           }).catch(() => {})
         }
+      }
+    }
+
+    // SMS notifications
+    if (status && order.shippingPhone) {
+      if (status === "SHIPPED") {
+        sendSms(order.shippingPhone, smsTemplates.orderShipped(order.orderNumber, body.trackingNumber || ""), "order_shipped").catch(() => {})
+      } else if (status === "DELIVERED") {
+        sendSms(order.shippingPhone, smsTemplates.orderDelivered(order.orderNumber), "order_delivered").catch(() => {})
+      } else if (status === "CANCELLED") {
+        sendSms(order.shippingPhone, smsTemplates.orderCancelled(order.orderNumber), "order_cancelled").catch(() => {})
       }
     }
 

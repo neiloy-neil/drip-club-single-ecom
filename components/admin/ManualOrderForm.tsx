@@ -125,12 +125,12 @@ export default function ManualOrderForm() {
   const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0)
   const total = subtotal + (Number(shippingCharge) || 0)
 
-  async function handleSubmit() {
+  async function handleSubmit(asDraft = false) {
     if (items.length === 0) {
       toast.error("Add at least one product")
       return
     }
-    if (!address.name || !address.phone) {
+    if (!asDraft && (!address.name || !address.phone)) {
       toast.error("Customer name and phone are required")
       return
     }
@@ -139,14 +139,14 @@ export default function ManualOrderForm() {
       const res = await fetch("/api/admin/orders/manual", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items, address, paymentMethod, shippingCharge, note, markPaid }),
+        body: JSON.stringify({ items, address, paymentMethod, shippingCharge, note, markPaid, asDraft }),
       })
       const data = await res.json()
       if (!res.ok) {
         toast.error(data.error || "Failed to create order")
         return
       }
-      toast.success("Order created")
+      toast.success(asDraft ? "Draft saved" : "Order created")
       router.push(`/admin/orders/${data.orderId}`)
     } catch {
       toast.error("Something went wrong")
@@ -288,8 +288,11 @@ export default function ManualOrderForm() {
             <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>৳{subtotal.toLocaleString()}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Shipping</span><span>৳{(Number(shippingCharge) || 0).toLocaleString()}</span></div>
             <div className="flex justify-between font-bold text-base pt-2 border-t"><span>Total</span><span>৳{total.toLocaleString()}</span></div>
-            <Button className="w-full mt-4" disabled={submitting} onClick={handleSubmit}>
+            <Button className="w-full mt-4" disabled={submitting} onClick={() => handleSubmit(false)}>
               {submitting ? "Creating..." : "Create Order"}
+            </Button>
+            <Button variant="outline" className="w-full mt-2" disabled={submitting} onClick={() => handleSubmit(true)}>
+              Save as Draft
             </Button>
           </CardContent>
         </Card>

@@ -142,6 +142,18 @@ type OrderEmailData = {
   giftMessage?: string | null
 }
 
+// Generic email sender — used for campaigns and other custom emails
+export async function sendEmail({ to, subject, html }: { to: string; subject: string; html: string }) {
+  const transport = await createTransport()
+  const store = await getStoreMeta()
+  await transport.sendMail({
+    from: `"${store.name}" <${store.email}>`,
+    to,
+    subject,
+    html,
+  })
+}
+
 export async function sendOrderConfirmation(data: OrderEmailData) {
   const store = await getStoreMeta()
   const itemRows = data.items.map((i) => `

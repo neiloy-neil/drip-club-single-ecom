@@ -15,6 +15,9 @@ import { Truck, RefreshCw, ShieldCheck } from "lucide-react"
 import type { Metadata } from "next"
 import { getActiveFlashSale, applyFlashSaleDiscount } from "@/lib/flashSale"
 import Link from "next/link"
+import { RecentlyViewedTracker } from "@/components/store/RecentlyViewedTracker"
+import { RecentlyViewed } from "@/components/store/RecentlyViewed"
+import FrequentlyBoughtTogether from "@/components/store/FrequentlyBoughtTogether"
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://drip.com.bd"
 
@@ -27,10 +30,10 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
   if (!product) return { title: "Product Not Found" }
 
-  const image = product.images[0]?.url
+  const image = (product as any).ogImage || product.images[0]?.url
   const price = Number(product.price).toLocaleString()
-  const title = `${product.name} — ৳${price}`
-  const description = product.description || `Shop ${product.name} at DRIP. Premium quality fashion from Bangladesh.`
+  const title = (product as any).metaTitle || `${product.name} — ৳${price}`
+  const description = (product as any).metaDescription || product.description?.slice(0, 160) || `Shop ${product.name} at DRIP. Premium quality fashion from Bangladesh.`
 
   return {
     title,
@@ -283,6 +286,9 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           </div>
         </div>
 
+        {/* Frequently Bought Together */}
+        <FrequentlyBoughtTogether productId={product.id} />
+
         {/* Related Products */}
         {relatedProducts.length > 0 && (
           <div className="mt-24 md:mt-32">
@@ -292,7 +298,20 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
             </div>
           </div>
         )}
+
+        {/* Recently Viewed */}
+        <RecentlyViewed currentProductId={product.id} />
       </div>
+
+      {/* Track this view */}
+      <RecentlyViewedTracker product={{
+        id: product.id,
+        slug: product.slug,
+        name: product.name,
+        image: product.images[0]?.url || "",
+        price: Number(product.price),
+        comparePrice: product.comparePrice ? Number(product.comparePrice) : undefined,
+      }} />
     </div>
   )
 }

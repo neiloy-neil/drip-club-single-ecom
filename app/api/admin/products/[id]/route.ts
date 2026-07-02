@@ -28,12 +28,12 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   try {
     const { id } = await params
     const body = await req.json()
-    const { name, slug, description, price, comparePrice, categoryId, tags, isActive, isFeatured, images, variants } = body
+    const { name, slug, description, price, comparePrice, categoryId, tags, isActive, isFeatured, images, variants, metaTitle, metaDescription, ogImage } = body
 
     // Update product fields
     const product = await prisma.product.update({
       where: { id },
-      data: { name, slug, description, price, comparePrice, categoryId, tags, isActive, isFeatured },
+      data: { name, slug, description, price, comparePrice, categoryId, tags, isActive, isFeatured, metaTitle: metaTitle || null, metaDescription: metaDescription || null, ogImage: ogImage || null },
     })
 
     // Sync images: delete old, recreate
@@ -46,6 +46,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
             url: img.url,
             alt: img.alt || "",
             sortOrder: i,
+            videoUrl: img.videoUrl || null,
+            isVideo: img.isVideo || false,
           })),
         })
       }

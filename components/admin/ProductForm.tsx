@@ -7,7 +7,7 @@ import { z } from "zod"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useRouter } from "next/navigation"
-import { PlusCircle, Trash2, ImagePlus, X, Upload, Link as LinkIcon, Loader2 } from "lucide-react"
+import { PlusCircle, Trash2, ImagePlus, X, Upload, Link as LinkIcon, Loader2, Video } from "lucide-react"
 import { toast } from "sonner"
 
 const productSchema = z.object({
@@ -20,6 +20,9 @@ const productSchema = z.object({
   tags: z.string().optional(),
   isActive: z.boolean().default(true),
   isFeatured: z.boolean().default(false),
+  metaTitle: z.string().optional(),
+  metaDescription: z.string().optional(),
+  ogImage: z.string().optional(),
   variants: z.array(z.object({
     size: z.string().min(1),
     color: z.string().min(1),
@@ -30,13 +33,16 @@ const productSchema = z.object({
   }))
 })
 
+type ImageItem = { url: string; alt: string; videoUrl?: string; isVideo?: boolean }
+
 export default function ProductForm({ initialData, categories }: { initialData?: any, categories: any[] }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
-  const [images, setImages] = useState<{ url: string; alt: string }[]>(
-    initialData?.images?.map((img: any) => ({ url: img.url, alt: img.alt || "" })) || []
+  const [images, setImages] = useState<ImageItem[]>(
+    initialData?.images?.map((img: any) => ({ url: img.url, alt: img.alt || "", videoUrl: img.videoUrl || "", isVideo: img.isVideo || false })) || []
   )
   const [newImageUrl, setNewImageUrl] = useState("")
+  const [newVideoUrl, setNewVideoUrl] = useState("")
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [dragImageIdx, setDragImageIdx] = useState<number | null>(null)
@@ -59,7 +65,7 @@ export default function ProductForm({ initialData, categories }: { initialData?:
       const res = await fetch("/api/admin/upload", { method: "POST", body: fd })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      setImages(prev => [...prev, { url: data.url, alt: file.name.replace(/\.[^.]+$/, "") }])
+      setImages(prev => [...prev, { url: data.url, alt: file.name.replace(/\.[^.]+$/, ""), isVideo: false }])
       toast.success("Image uploaded")
     } catch (e: any) {
       toast.error(e.message || "Upload failed")
@@ -81,11 +87,29 @@ export default function ProductForm({ initialData, categories }: { initialData?:
     e.target.value = ""
   }, [uploadFile])
 
+  const getYouTubeThumbnail = (url: string) => {
+    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/)
+    return match ? `https://img.youtube.com/vi/${match[1]}/mqdefault.jpg` : null
+  }
+
+  const addVideo = () => {
+    if (!newVideoUrl.trim()) return
+    const thumbUrl = getYouTubeThumbnail(newVideoUrl) || newVideoUrl
+    setImages(prev => [...prev, { url: thumbUrl, alt: "Video", videoUrl: newVideoUrl.trim(), isVideo: true }])
+    setNewVideoUrl("")
+  }
+
   const { register, handleSubmit, control, watch, setValue, formState: { errors } } = useForm({
     resolver: zodResolver(productSchema),
-    defaultValues: initialData || {
-      name: "", slug: "", description: "", categoryId: "", price: 0, 
+    defaultValues: initialData ? {
+      ...initialData,
+      metaTitle: initialData.metaTitle || "",
+      metaDescription: initialData.metaDescription || "",
+      ogImage: initialData.ogImage || "",
+    } : {
+      name: "", slug: "", description: "", categoryId: "", price: 0,
       tags: "", isActive: true, isFeatured: false,
+      metaTitle: "", metaDescription: "", ogImage: "",
       variants: [{ size: "M", color: "Black", sku: "", stock: 0 }]
     }
   })
@@ -101,12 +125,18 @@ export default function ProductForm({ initialData, categories }: { initialData?:
     setValue("slug", watchName.toLowerCase().replace(/[\s_]+/g, '-').replace(/[^\w-]+/g, ''))
   }
 
+  const watchMetaTitle = watch("metaTitle") || ""
+  const watchMetaDesc = watch("metaDescription") || ""
+
   const onSubmit = async (data: any) => {
     setLoading(true)
     try {
       const payload = {
         ...data,
         tags: data.tags || null,
+        metaTitle: data.metaTitle || null,
+        metaDescription: data.metaDescription || null,
+        ogImage: data.ogImage || null,
         images
       }
 
@@ -200,6 +230,50 @@ export default function ProductForm({ initialData, categories }: { initialData?:
               </Button>
             </CardContent>
           </Card>
+
+          {/* SEO Section */}
+          <Card>
+            <CardHeader><CardTitle>SEO</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium">Meta Title</label>
+                  <span className={`text-xs ${watchMetaTitle.length > 60 ? "text-red-500" : "text-muted-foreground"}`}>{watchMetaTitle.length}/60</span>
+                </div>
+                <input
+                  {...register("metaTitle")}
+                  maxLength={70}
+                  placeholder="Leave blank to use product name"
+                  className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium">Meta Description</label>
+                  <span className={`text-xs ${watchMetaDesc.length > 160 ? "text-red-500" : "text-muted-foreground"}`}>{watchMetaDesc.length}/160</span>
+                </div>
+                <textarea
+                  {...register("metaDescription")}
+                  rows={3}
+                  maxLength={200}
+                  placeholder="Leave blank to use product description"
+                  className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">OG Image URL</label>
+                <input
+                  {...register("ogImage")}
+                  type="url"
+                  placeholder="https://... (leave blank to use first product image)"
+                  className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                {watch("ogImage") && (
+                  <img src={watch("ogImage")} alt="OG preview" className="mt-2 rounded border h-24 object-cover" />
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="space-y-6">
@@ -230,7 +304,7 @@ export default function ProductForm({ initialData, categories }: { initialData?:
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader><CardTitle>Status</CardTitle></CardHeader>
             <CardContent className="space-y-4">
@@ -246,7 +320,7 @@ export default function ProductForm({ initialData, categories }: { initialData?:
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>Product Images</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Product Images & Videos</CardTitle></CardHeader>
             <CardContent className="space-y-4">
 
               {/* Drag & Drop Upload Zone */}
@@ -281,7 +355,7 @@ export default function ProductForm({ initialData, categories }: { initialData?:
                 )}
               </div>
 
-              {/* Image previews — drag to reorder */}
+              {/* Image/Video previews — drag to reorder */}
               {images.length > 0 && (
                 <div className="grid grid-cols-2 gap-3">
                   {images.map((img, i) => (
@@ -306,6 +380,11 @@ export default function ProductForm({ initialData, categories }: { initialData?:
                       }`}
                     >
                       <img src={img.url} alt={img.alt || `Image ${i + 1}`} className="w-full h-full object-cover pointer-events-none" />
+                      {img.isVideo && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                          <Video className="w-8 h-8 text-white" />
+                        </div>
+                      )}
                       <button
                         type="button"
                         onClick={() => setImages(images.filter((_, idx) => idx !== i))}
@@ -313,9 +392,14 @@ export default function ProductForm({ initialData, categories }: { initialData?:
                       >
                         <X className="w-3 h-3" />
                       </button>
-                      {i === 0 && (
+                      {i === 0 && !img.isVideo && (
                         <span className="absolute bottom-1 left-1 text-[10px] bg-black/60 text-white px-1.5 py-0.5 rounded">
                           Cover
+                        </span>
+                      )}
+                      {img.isVideo && (
+                        <span className="absolute bottom-1 left-1 text-[10px] bg-red-600/80 text-white px-1.5 py-0.5 rounded">
+                          Video
                         </span>
                       )}
                     </div>
@@ -339,7 +423,7 @@ export default function ProductForm({ initialData, categories }: { initialData?:
                   type="button"
                   onClick={() => {
                     if (!newImageUrl.trim()) return
-                    setImages([...images, { url: newImageUrl.trim(), alt: "" }])
+                    setImages([...images, { url: newImageUrl.trim(), alt: "", isVideo: false }])
                     setNewImageUrl("")
                   }}
                   className="flex items-center gap-1 px-3 py-1.5 text-sm border border-input rounded-md hover:bg-muted transition-colors whitespace-nowrap"
@@ -347,7 +431,29 @@ export default function ProductForm({ initialData, categories }: { initialData?:
                   <ImagePlus className="w-4 h-4" /> Add URL
                 </button>
               </div>
-              <p className="text-xs text-muted-foreground">First image = cover photo. Drag images to reorder.</p>
+
+              {/* Video URL */}
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Video className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <input
+                    type="url"
+                    value={newVideoUrl}
+                    onChange={(e) => setNewVideoUrl(e.target.value)}
+                    placeholder="YouTube, Vimeo, or .mp4 URL"
+                    className="w-full h-9 pl-8 pr-3 rounded-md border border-input bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={addVideo}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm border border-input rounded-md hover:bg-muted transition-colors whitespace-nowrap"
+                >
+                  <Video className="w-4 h-4" /> Add Video
+                </button>
+              </div>
+
+              <p className="text-xs text-muted-foreground">First image = cover photo. Drag to reorder.</p>
             </CardContent>
           </Card>
         </div>
