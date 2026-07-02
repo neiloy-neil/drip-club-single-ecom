@@ -9,6 +9,8 @@ import { cookies } from "next/headers"
 import { sendOrderConfirmation, sendAdminNewOrder } from "@/lib/email"
 import { mailchimpAddTags } from "@/lib/mailchimp"
 import { klaviyoOrderPlaced } from "@/lib/klaviyo"
+import { sendSms, smsTemplates } from "@/lib/sms"
+import { runWorkflows } from "@/lib/workflowEngine"
 
 export async function POST(req: Request) {
   try {
@@ -16,7 +18,8 @@ export async function POST(req: Request) {
     const { items, address, paymentMethod, subtotal, shippingCharge, total, userId,
       note, giftWrap, giftMessage, giftWrapCharge, isGuest, guestEmail,
       loyaltyPointsRedeemed, loyaltyDiscount, storeCreditRedeemed, customFields,
-      couponId, couponDiscount: clientCouponDiscount, deliveryDate } = body
+      couponId, couponDiscount: clientCouponDiscount, deliveryDate,
+      giftCardCode, giftCardDiscount: clientGiftCardDiscount } = body
 
     if (!items?.length || !address || !paymentMethod) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
@@ -143,7 +146,18 @@ export async function POST(req: Request) {
       serverCreditDiscount = Math.min(storeCreditRedeemed, Number(credit?.balance ?? 0))
     }
 
-    const serverTotal = Math.max(0, serverSubtotal + serverShippingCharge + serverTaxAmount + serverGiftWrapCharge - autoDiscountAmount - serverLoyaltyDiscount - serverCreditDiscount - serverCouponDiscount)
+    // Validate gift card
+    let serverGiftCardDiscount = 0
+    let validatedGiftCard: any = null
+    if (giftCardCode) {
+      validatedGiftCard = await prisma.giftCard.findUnique({ where: { code: giftCardCode } })
+      if (validatedGiftCard && validatedGiftCard.isActive && Number(validatedGiftCard.balance) > 0 &&
+          (!validatedGiftCard.expiresAt || new Date(validatedGiftCard.expiresAt) > new Date())) {
+        serverGiftCardDiscount = Math.min(clientGiftCardDiscount || Number(validatedGiftCard.balance), Number(validatedGiftCard.balance))
+      }
+    }
+
+    const serverTotal = Math.max(0, serverSubtotal + serverShippingCharge + serverTaxAmount + serverGiftWrapCharge - autoDiscountAmount - serverLoyaltyDiscount - serverCreditDiscount - serverCouponDiscount - serverGiftCardDiscount)
 
     const order = await prisma.$transaction(async (tx) => {
       // Re-check stock inside transaction to prevent race conditions
@@ -228,6 +242,17 @@ export async function POST(req: Request) {
         await tx.storeCreditTransaction.create({
           data: { userId: userId!, storeCreditId: credit.id, amount: serverCreditDiscount, type: "DEBIT", reason: `Applied to order ${order.orderNumber}`, orderId: order.id },
         })
+      }).catch(() => {})
+    }
+
+    // Deduct gift card balance used
+    if (validatedGiftCard && serverGiftCardDiscount > 0) {
+      prisma.giftCard.update({
+        where: { id: validatedGiftCard.id },
+        data: { balance: { decrement: serverGiftCardDiscount }, usedCount: { increment: 1 } },
+      }).catch(() => {})
+      prisma.giftCardTransaction.create({
+        data: { giftCardId: validatedGiftCard.id, amount: serverGiftCardDiscount, type: "REDEEM", orderId: order.id },
       }).catch(() => {})
     }
 
@@ -332,6 +357,27 @@ export async function POST(req: Request) {
         mailchimpAddTags(toEmail, ["has_ordered"]).catch(() => {})
       }
     }
+
+    // SMS order confirmed (fire-and-forget)
+    if (address.phone) {
+      sendSms(address.phone, smsTemplates.orderConfirmed(order.orderNumber, serverTotal), "order_confirmed").catch(() => {})
+    }
+
+    // Funnel: checkout_complete (fire-and-forget)
+    fetch(`${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/store/funnel`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event: "checkout_complete", orderId: order.id, value: serverTotal, sessionId: "server" }),
+    }).catch(() => {})
+
+    // Workflow engine: ORDER_PLACED trigger (fire-and-forget)
+    runWorkflows("ORDER_PLACED", {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      total: serverTotal,
+      paymentMethod,
+      userId: userId || null,
+    }).catch(() => {})
 
     return NextResponse.json({ orderId: order.id, depositAmount })
   } catch (error: any) {

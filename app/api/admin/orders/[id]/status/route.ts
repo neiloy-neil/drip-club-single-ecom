@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma"
 import { requireAdmin } from "@/lib/adminAuth"
 import { sendOrderStatusUpdate, sendShippingDispatched } from "@/lib/email"
 import { sendSms, smsTemplates } from "@/lib/sms"
+import { runWorkflows } from "@/lib/workflowEngine"
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { error } = await requireAdmin()
@@ -66,6 +67,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       } else if (status === "CANCELLED") {
         sendSms(order.shippingPhone, smsTemplates.orderCancelled(order.orderNumber), "order_cancelled").catch(() => {})
       }
+    }
+
+    // Workflow engine: ORDER_STATUS_CHANGED (fire-and-forget)
+    if (status) {
+      runWorkflows("ORDER_STATUS_CHANGED", { orderId: id, status, previousStatus: order.status }).catch(() => {})
     }
 
     return NextResponse.json(order)

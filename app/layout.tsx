@@ -66,6 +66,11 @@ export async function generateMetadata(): Promise<Metadata> {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={cn("font-sans", inter.variable, playfair.variable, spaceGrotesk.variable)}>
+      <head>
+        <meta name="theme-color" content="#1a1a1a" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+      </head>
       <body className="antialiased text-drip-text bg-drip-bg selection:bg-drip-gold/30">
         <Analytics />
         {children}

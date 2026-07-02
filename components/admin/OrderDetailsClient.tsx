@@ -1,10 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Printer, AlertTriangle, ShieldCheck } from "lucide-react"
+import { Printer, AlertTriangle, ShieldCheck, Tag, X, Send, MessageSquare } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import type { CustomerRisk } from "@/lib/customerRisk"
@@ -25,6 +25,12 @@ export default function OrderDetailsClient({
   const router = useRouter()
   const [order, setOrder] = useState(initialOrder)
   const [loading, setLoading] = useState(false)
+  const [tags, setTags] = useState<string[]>(initialOrder.tags || [])
+  const [tagInput, setTagInput] = useState("")
+  const [messages, setMessages] = useState<any[]>([])
+  const [msgText, setMsgText] = useState("")
+  const [msgLoading, setMsgLoading] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
   const [deliveryData, setDeliveryData] = useState({
     courier: order.delivery?.courier || "PATHAO",
     consignmentId: order.delivery?.consignmentId || "",
@@ -65,6 +71,56 @@ export default function OrderDetailsClient({
     } finally {
       setLoading(false)
     }
+  }
+
+  useEffect(() => {
+    fetch(`/api/admin/orders/${initialOrder.id}/messages`)
+      .then(r => r.json()).then(d => setMessages(d.messages || [])).catch(() => {})
+  }, [initialOrder.id])
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages])
+
+  const addTag = async () => {
+    const t = tagInput.trim().toLowerCase().replace(/\s+/g, "-")
+    if (!t || tags.includes(t)) { setTagInput(""); return }
+    const next = [...tags, t]
+    setTags(next)
+    setTagInput("")
+    await fetch(`/api/admin/orders/${order.id}/tags`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tags: next }),
+    })
+  }
+
+  const removeTag = async (t: string) => {
+    const next = tags.filter(x => x !== t)
+    setTags(next)
+    await fetch(`/api/admin/orders/${order.id}/tags`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tags: next }),
+    })
+  }
+
+  const sendMessage = async () => {
+    if (!msgText.trim()) return
+    setMsgLoading(true)
+    try {
+      const res = await fetch(`/api/admin/orders/${order.id}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: msgText }),
+      })
+      if (res.ok) {
+        const d = await res.json()
+        setMessages(prev => [...prev, d.message])
+        setMsgText("")
+      }
+    } finally {
+      setMsgLoading(false) }
   }
 
   const saveDelivery = async () => {
@@ -263,6 +319,61 @@ export default function OrderDetailsClient({
                   <option value="PAID">Paid</option>
                   <option value="REFUNDED">Refunded</option>
                 </select>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle className="flex items-center gap-2"><Tag className="h-4 w-4" /> Order Tags</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex flex-wrap gap-1.5 min-h-[28px]">
+                {tags.map(t => (
+                  <span key={t} className="flex items-center gap-1 bg-slate-100 text-slate-700 text-xs px-2 py-1 rounded-full">
+                    {t}
+                    <button onClick={() => removeTag(t)} className="hover:text-red-500"><X className="h-3 w-3" /></button>
+                  </span>
+                ))}
+                {tags.length === 0 && <span className="text-xs text-muted-foreground">No tags yet</span>}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  value={tagInput}
+                  onChange={e => setTagInput(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && addTag()}
+                  placeholder="vip, gift, express…"
+                  className="flex-1 h-8 rounded-md border border-input bg-transparent px-3 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+                <Button size="sm" variant="outline" onClick={addTag} className="h-8 text-xs">Add</Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle className="flex items-center gap-2"><MessageSquare className="h-4 w-4" /> Customer Messages</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+                {messages.length === 0 && <p className="text-xs text-muted-foreground text-center py-4">No messages yet</p>}
+                {messages.map((m: any) => (
+                  <div key={m.id} className={`flex ${m.fromAdmin ? "justify-end" : "justify-start"}`}>
+                    <div className={`max-w-[85%] rounded-lg px-3 py-1.5 text-xs ${m.fromAdmin ? "bg-slate-800 text-white" : "bg-muted text-foreground"}`}>
+                      <p>{m.message}</p>
+                      <p className={`text-[10px] mt-0.5 ${m.fromAdmin ? "text-slate-400" : "text-muted-foreground"}`}>{new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
+                    </div>
+                  </div>
+                ))}
+                <div ref={messagesEndRef} />
+              </div>
+              <div className="flex gap-2 pt-1 border-t">
+                <input
+                  value={msgText}
+                  onChange={e => setMsgText(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendMessage()}
+                  placeholder="Reply to customer…"
+                  className="flex-1 h-8 rounded-md border border-input bg-transparent px-3 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+                <Button size="sm" onClick={sendMessage} disabled={msgLoading} className="h-8 px-3">
+                  <Send className="h-3.5 w-3.5" />
+                </Button>
               </div>
             </CardContent>
           </Card>
