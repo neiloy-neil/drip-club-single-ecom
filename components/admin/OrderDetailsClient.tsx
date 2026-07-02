@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Printer, AlertTriangle, ShieldCheck, Tag, X, Send, MessageSquare } from "lucide-react"
+import { Printer, AlertTriangle, ShieldCheck, Tag, X, Send, MessageSquare, Phone, PhoneCall } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import type { CustomerRisk } from "@/lib/customerRisk"
@@ -30,6 +30,7 @@ export default function OrderDetailsClient({
   const [messages, setMessages] = useState<any[]>([])
   const [msgText, setMsgText] = useState("")
   const [msgLoading, setMsgLoading] = useState(false)
+  const codVerified = tags.includes("cod-verified")
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [deliveryData, setDeliveryData] = useState({
     courier: order.delivery?.courier || "PATHAO",
@@ -280,6 +281,22 @@ export default function OrderDetailsClient({
               )}
             </CardContent>
           </Card>
+
+          {order.paymentMethod === "COD" && (
+            <Card>
+              <CardHeader><CardTitle className="flex items-center gap-2"><Phone className="h-4 w-4" /> COD Verification</CardTitle></CardHeader>
+              <CardContent>
+                <button
+                  onClick={() => codVerified ? removeTag("cod-verified") : (setTags(t => [...t, "cod-verified"]), fetch(`/api/admin/orders/${order.id}/tags`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tags: [...tags, "cod-verified"] }) }))}
+                  className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 font-medium text-sm transition-all ${codVerified ? "border-green-500 bg-green-50 text-green-700" : "border-dashed border-slate-300 text-slate-500 hover:border-slate-400"}`}
+                >
+                  <PhoneCall className="h-4 w-4" />
+                  {codVerified ? "✓ Phone call verified" : "Mark as phone-verified"}
+                </button>
+                <p className="text-[11px] text-muted-foreground mt-2 text-center">Confirm customer intent before processing COD order</p>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader><CardTitle>Status Management</CardTitle></CardHeader>

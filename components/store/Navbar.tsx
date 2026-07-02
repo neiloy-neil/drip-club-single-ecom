@@ -58,14 +58,14 @@ export default function Navbar({
       {/* Announcement Bar */}
       <div className={`text-drip-surface text-center py-2 text-xs md:text-sm font-medium tracking-wide overflow-hidden transition-colors ${activeFlashSale && flashCountdown ? "bg-drip-error" : "bg-drip-black"}`}>
         {activeFlashSale && flashCountdown ? (
-          <p className="whitespace-nowrap flex items-center justify-center gap-2">
-            <Zap className="w-3 h-3 inline" />
+          <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 px-3">
+            <Zap className="w-3 h-3 inline shrink-0" />
             <span>{activeFlashSale.name} — {flashLabel} sitewide!</span>
             <span className="font-mono">Ends in {flashCountdown}</span>
-            <Zap className="w-3 h-3 inline" />
+            <Zap className="w-3 h-3 inline shrink-0" />
           </p>
         ) : (
-          <p className="whitespace-nowrap">Free delivery on orders above ৳{freeShippingThreshold} 🚚</p>
+          <p>Free delivery on orders above ৳{freeShippingThreshold} 🚚</p>
         )}
       </div>
 

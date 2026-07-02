@@ -1,6 +1,8 @@
 import Navbar from "@/components/store/Navbar";
 import Footer from "@/components/store/Footer";
 import WishlistSync from "@/components/store/WishlistSync";
+import PixelPageView from "@/components/store/PixelPageView";
+import { Suspense } from "react";
 import prisma from "@/lib/prisma";
 import { getActiveFlashSaleBatch, applyFlashSaleDiscount } from "@/lib/flashSale";
 
@@ -66,6 +68,7 @@ export default async function StoreLayout({
         } : null}
       />
       <WishlistSync />
+      <Suspense fallback={null}><PixelPageView /></Suspense>
       <main className="flex-1">
         {children}
       </main>

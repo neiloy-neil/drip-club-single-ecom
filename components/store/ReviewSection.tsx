@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useSession } from "@/hooks/useSession"
-import { Star, Loader2 } from "lucide-react"
+import { Star, Loader2, ImagePlus, X } from "lucide-react"
 import { toast } from "sonner"
+import Image from "next/image"
 
 type Review = {
   id: string
@@ -11,6 +12,7 @@ type Review = {
   comment: string | null
   createdAt: string
   user: { name: string | null }
+  media?: { url: string }[]
 }
 
 function StarRow({ value, size = 16 }: { value: number; size?: number }) {
@@ -37,7 +39,10 @@ export default function ReviewSection({ productId }: { productId: string }) {
   const [showForm, setShowForm] = useState(false)
   const [rating, setRating] = useState(0)
   const [comment, setComment] = useState("")
+  const [photos, setPhotos] = useState<File[]>([])
+  const [previews, setPreviews] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const load = () => {
     fetch(`/api/products/${productId}/reviews`)
@@ -54,6 +59,19 @@ export default function ReviewSection({ productId }: { productId: string }) {
     load()
   }, [productId])
 
+  function addPhotos(files: FileList | null) {
+    if (!files) return
+    const newFiles = Array.from(files).slice(0, 4 - photos.length)
+    setPhotos(p => [...p, ...newFiles])
+    setPreviews(p => [...p, ...newFiles.map(f => URL.createObjectURL(f))])
+  }
+
+  function removePhoto(i: number) {
+    URL.revokeObjectURL(previews[i])
+    setPhotos(p => p.filter((_, idx) => idx !== i))
+    setPreviews(p => p.filter((_, idx) => idx !== i))
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!rating) {
@@ -62,10 +80,22 @@ export default function ReviewSection({ productId }: { productId: string }) {
     }
     setSubmitting(true)
     try {
+      // Upload photos first
+      const mediaUrls: string[] = []
+      for (const file of photos) {
+        const fd = new FormData()
+        fd.append("file", file)
+        const up = await fetch("/api/admin/upload", { method: "POST", body: fd })
+        if (up.ok) {
+          const { url } = await up.json()
+          mediaUrls.push(url)
+        }
+      }
+
       const res = await fetch(`/api/products/${productId}/reviews`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rating, comment }),
+        body: JSON.stringify({ rating, comment, mediaUrls }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -75,6 +105,8 @@ export default function ReviewSection({ productId }: { productId: string }) {
         setShowForm(false)
         setRating(0)
         setComment("")
+        setPhotos([])
+        setPreviews([])
         load()
       }
     } catch {
@@ -114,6 +146,41 @@ export default function ReviewSection({ productId }: { productId: string }) {
               rows={3}
               className="w-full bg-white border border-drip-border rounded-lg px-3 py-2 text-sm outline-none focus:border-drip-gold resize-none"
             />
+            {/* Photo upload */}
+            <div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={e => addPhotos(e.target.files)}
+              />
+              <div className="flex flex-wrap gap-2">
+                {previews.map((src, i) => (
+                  <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-drip-border group">
+                    <Image src={src} alt="preview" fill sizes="64px" className="object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => removePhoto(i)}
+                      className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                    >
+                      <X className="w-4 h-4 text-white" />
+                    </button>
+                  </div>
+                ))}
+                {photos.length < 4 && (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-16 h-16 rounded-lg border border-dashed border-drip-border flex flex-col items-center justify-center gap-1 text-drip-text-muted hover:border-drip-gold hover:text-drip-gold transition-colors"
+                  >
+                    <ImagePlus className="w-4 h-4" />
+                    <span className="text-[9px] font-bold uppercase">Photo</span>
+                  </button>
+                )}
+              </div>
+            </div>
             <div className="flex gap-3">
               <button
                 type="submit"
@@ -161,6 +228,15 @@ export default function ReviewSection({ productId }: { productId: string }) {
               </div>
               <StarRow value={r.rating} />
               {r.comment && <p className="text-sm text-drip-text-muted mt-2">{r.comment}</p>}
+              {r.media && r.media.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {r.media.map((m, i) => (
+                    <a key={i} href={m.url} target="_blank" rel="noopener noreferrer" className="relative w-16 h-16 rounded-lg overflow-hidden border border-drip-border hover:opacity-80 transition-opacity">
+                      <Image src={m.url} alt="review photo" fill sizes="64px" className="object-cover" />
+                    </a>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>

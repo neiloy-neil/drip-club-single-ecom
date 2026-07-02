@@ -4,7 +4,8 @@ import { useState } from "react"
 import Image from "next/image"
 import { useCartStore } from "@/store/useCartStore"
 import { useRouter } from "next/navigation"
-import { MapPin, CreditCard, ClipboardCheck, ChevronRight, Check, Gift, MessageSquare, User, Star, Wallet, Tag, Calendar } from "lucide-react"
+import { MapPin, CreditCard, ClipboardCheck, ChevronRight, Check, Gift, MessageSquare, User, Star, Wallet, Tag, Calendar, Users } from "lucide-react"
+import { trackInitiateCheckout } from "@/lib/analytics"
 
 type CheckoutField = {
   id: string
@@ -87,6 +88,9 @@ export default function CheckoutForm({
   // Delivery date
   const [deliveryDate, setDeliveryDate] = useState("")
 
+  // Referral code
+  const [referralCode, setReferralCode] = useState("")
+
   const subtotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0)
   const shippingCharge = subtotal >= freeShippingThreshold ? 0 : shippingChargeAmount
   const taxAmount = taxEnabled ? Math.round((subtotal * taxRate) / 100) : 0
@@ -123,6 +127,7 @@ export default function CheckoutForm({
   const handleSubmitStep1 = async (e: React.FormEvent) => {
     e.preventDefault()
     setStep(2)
+    trackInitiateCheckout(total, items.reduce((s, i) => s + i.quantity, 0))
     try {
       const res = await fetch("/api/store/deposit-check", {
         method: "POST",
@@ -201,6 +206,14 @@ export default function CheckoutForm({
         clearCart()
         window.location.href = nagadData.nagadURL
       } else {
+        // Apply referral reward if code was entered
+        if (referralCode.trim() && orderData.orderId) {
+          fetch("/api/store/referral", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ referralCode: referralCode.trim(), orderId: orderData.orderId }),
+          }).catch(() => {})
+        }
         clearCart()
         router.push(`/order/${orderData.orderId}?placed=1`)
       }
@@ -584,6 +597,21 @@ export default function CheckoutForm({
                   )}
                 </div>
               )}
+
+              {/* Referral code */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold uppercase tracking-widest text-drip-text-muted flex items-center gap-2">
+                  <Star className="w-4 h-4" /> Referral Code (optional)
+                </label>
+                <input
+                  type="text"
+                  value={referralCode}
+                  onChange={e => setReferralCode(e.target.value)}
+                  placeholder="Enter a friend's referral code"
+                  className={inputCls}
+                />
+                <p className="text-xs text-drip-text-muted">First-time orders only — both you and your friend get ৳100 store credit.</p>
+              </div>
 
               <p className="text-xs text-drip-text-muted">By placing this order you agree to our Terms of Service and Privacy Policy.</p>
               <button

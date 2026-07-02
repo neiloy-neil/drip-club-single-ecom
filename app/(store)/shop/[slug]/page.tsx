@@ -153,7 +153,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           </div>
 
           {/* Product Info */}
-          <div className="w-full lg:w-2/5 flex flex-col pt-4 lg:pt-10 sticky top-20 h-max">
+          <div className="w-full lg:w-2/5 flex flex-col pt-4 lg:pt-10 lg:sticky lg:top-20 lg:h-max">
 
             {/* Title & Price */}
             <div className="mb-8">

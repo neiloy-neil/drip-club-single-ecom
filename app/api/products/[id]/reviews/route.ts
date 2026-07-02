@@ -54,6 +54,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     )
   }
 
+  const isNew = !(await prisma.review.findUnique({ where: { userId_productId: { userId: session.user.id, productId } } }))
+
   const review = await prisma.review.upsert({
     where: { userId_productId: { userId: session.user.id, productId } },
     create: {
@@ -69,5 +71,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     },
   })
 
-  return NextResponse.json({ review }, { status: 201 })
+  // Award 10 loyalty points for first-time review
+  if (isNew) {
+    await prisma.loyaltyPoint.create({
+      data: { userId: session.user.id, points: 10, type: "EARNED", note: "Review reward" },
+    }).catch(() => {})
+  }
+
+  return NextResponse.json({ review, pointsAwarded: isNew ? 10 : 0 }, { status: 201 })
 }

@@ -87,8 +87,19 @@ export default async function PackingSlipPage({ params }: { params: Promise<{ id
           </div>
         )}
 
-        <div style={{ textAlign: "center", fontSize: 10, color: "#999", marginTop: 16 }}>
-          Thank you for your order!
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 16, paddingTop: 12, borderTop: "1px dashed #ccc" }}>
+          <img
+            src={`https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(`${process.env.NEXT_PUBLIC_SITE_URL || "https://drip.com.bd"}/track/${order.orderNumber}`)}`}
+            alt="Track order QR"
+            width={80}
+            height={80}
+            style={{ flexShrink: 0 }}
+          />
+          <div>
+            <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: "#666" }}>Scan to track your order</div>
+            <div style={{ fontWeight: "bold", fontSize: 11, marginTop: 2 }}>{order.orderNumber}</div>
+            <div style={{ fontSize: 10, color: "#999", marginTop: 8 }}>Thank you for shopping with us!</div>
+          </div>
         </div>
 
         <button

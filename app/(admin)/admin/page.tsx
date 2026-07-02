@@ -6,6 +6,7 @@ import { PlusCircle, ShoppingCart, TrendingUp, Users, AlertCircle, Clock, Refres
 import Link from "next/link"
 import prisma from "@/lib/prisma"
 import RevenueChart from "@/components/admin/RevenueChart"
+import DashboardCharts from "@/components/admin/DashboardCharts"
 
 const STATUS_COLORS: Record<string, string> = {
   PENDING: "bg-yellow-100 text-yellow-800",
@@ -38,6 +39,10 @@ export default async function DashboardPage() {
     revenueOrders,
     revenue30d,
     recentOrders,
+    topProducts,
+    ordersByStatus,
+    ordersByPayment,
+    aovData,
   ] = await Promise.all([
     prisma.order.count({ where: { createdAt: { gte: today } } }).catch(() => 0),
     prisma.order.count({ where: { status: { in: ["PENDING", "CONFIRMED"] } } }).catch(() => 0),
@@ -59,6 +64,33 @@ export default async function DashboardPage() {
       orderBy: { createdAt: "desc" },
       include: { user: true },
     }).catch(() => []),
+    // Top 5 products by revenue (last 30 days)
+    prisma.orderItem.groupBy({
+      by: ["productName"],
+      where: { order: { createdAt: { gte: thirtyDaysAgo }, status: { not: "CANCELLED" } } },
+      _sum: { price: true, quantity: true },
+      orderBy: { _sum: { price: "desc" } },
+      take: 5,
+    }).catch(() => []),
+    // Orders by status
+    prisma.order.groupBy({
+      by: ["status"],
+      where: { createdAt: { gte: thirtyDaysAgo } },
+      _count: { id: true },
+    }).catch(() => []),
+    // Orders by payment method (30d)
+    prisma.order.groupBy({
+      by: ["paymentMethod"],
+      where: { createdAt: { gte: thirtyDaysAgo }, status: { not: "CANCELLED" } },
+      _count: { id: true },
+      _sum: { total: true },
+    }).catch(() => []),
+    // AOV (30d)
+    prisma.order.aggregate({
+      where: { createdAt: { gte: thirtyDaysAgo }, status: { not: "CANCELLED" } },
+      _avg: { total: true },
+      _count: { id: true },
+    }).catch(() => ({ _avg: { total: 0 }, _count: { id: 0 } })),
   ])
 
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
@@ -77,6 +109,21 @@ export default async function DashboardPage() {
     .reduce((sum, o) => sum + Number(o.total), 0)
 
   const revenue30dTotal = Number(revenue30d._sum.total || 0)
+  const aov = Math.round(Number(aovData._avg.total || 0))
+  const orderCount30d = aovData._count.id
+
+  const topProductsData = topProducts.map((p: any) => ({
+    name: p.productName,
+    revenue: Number(p._sum.price || 0) * (p._sum.quantity || 1),
+    units: p._sum.quantity || 0,
+  }))
+
+  const statusData = ordersByStatus.map((s: any) => ({ name: s.status, value: s._count.id }))
+  const paymentData = ordersByPayment.map((p: any) => ({
+    method: p.paymentMethod,
+    count: p._count.id,
+    revenue: Number(p._sum.total || 0),
+  }))
 
   return (
     <div className="space-y-6">
@@ -127,11 +174,13 @@ export default async function DashboardPage() {
       )}
 
       {/* KPI cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard title="Today's Revenue" value={`৳${revenueToday.toLocaleString()}`} icon={TrendingUp}
           sub={`৳${revenue30dTotal.toLocaleString()} last 30 days`} />
         <KpiCard title="Orders Today" value={String(ordersToday)} icon={ShoppingCart}
           sub={pendingOrders > 0 ? `${pendingOrders} pending confirmation` : "All confirmed"} highlight={pendingOrders > 0} />
+        <KpiCard title="Avg. Order Value" value={aov > 0 ? `৳${aov.toLocaleString()}` : "—"} icon={TrendingUp}
+          sub={`${orderCount30d} orders last 30 days`} />
         <KpiCard title="Customers" value={customersTotal.toLocaleString()} icon={Users}
           sub={newCustomersToday > 0 ? `+${newCustomersToday} new today` : "No new today"} />
         <KpiCard title="Stock Alerts" value={String(lowStockCount + outOfStockCount)} icon={AlertCircle}
@@ -188,6 +237,13 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Bottom row: top products + order status + payment split */}
+      <DashboardCharts
+        topProducts={topProductsData}
+        statusData={statusData}
+        paymentData={paymentData}
+      />
     </div>
   )
 }

@@ -6,7 +6,7 @@ import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Eye, Printer, AlertTriangle } from "lucide-react"
+import { Eye, Printer, AlertTriangle, Download } from "lucide-react"
 import Link from "next/link"
 
 const STATUS_COLORS: Record<string, string> = {
@@ -121,6 +121,11 @@ export default function OrdersBulkClient({
             <Button size="sm" variant="outline" onClick={printSelected} className="gap-1">
               <Printer className="h-3.5 w-3.5" /> Print Packing Slips
             </Button>
+            <a href={`/api/admin/orders/export?ids=${Array.from(selected).join(",")}`}>
+              <Button size="sm" variant="outline" className="gap-1">
+                <Download className="h-3.5 w-3.5" /> Export
+              </Button>
+            </a>
             <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
               Clear
             </Button>

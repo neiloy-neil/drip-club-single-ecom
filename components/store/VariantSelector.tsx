@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { useCartStore } from "@/store/useCartStore"
 import NotifyMeForm from "@/components/store/NotifyMeForm"
 import SizeGuideModal from "@/components/store/SizeGuideModal"
+import SizeQuiz from "@/components/store/SizeQuiz"
 
 export default function VariantSelector({
   product,
@@ -104,7 +105,10 @@ export default function VariantSelector({
         <div className="space-y-3">
           <div className="flex items-baseline justify-between">
             <h3 className="text-xs font-bold uppercase tracking-widest text-drip-black">{attr1Label}</h3>
-            {categoryId && <SizeGuideModal categoryId={categoryId} />}
+            <div className="flex items-center gap-3">
+              <QuizButton />
+              {categoryId && <SizeGuideModal categoryId={categoryId} />}
+            </div>
           </div>
           <div className="grid grid-cols-4 sm:grid-cols-5 gap-3">
             {sizes.map(size => {
@@ -164,5 +168,24 @@ export default function VariantSelector({
         )}
       </div>
     </div>
+  )
+}
+
+
+function QuizButton() {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <button onClick={() => setOpen(true)} className="text-[11px] text-drip-text-muted hover:text-drip-black underline underline-offset-2 transition-colors">
+        Find my size
+      </button>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setOpen(false)}>
+          <div onClick={e => e.stopPropagation()}>
+            <SizeQuiz onClose={() => setOpen(false)} />
+          </div>
+        </div>
+      )}
+    </>
   )
 }

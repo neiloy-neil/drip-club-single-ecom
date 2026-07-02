@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   Table,
@@ -12,9 +12,10 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { AlertCircle } from "lucide-react"
+import { AlertCircle, Upload, Download } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
+import { toast } from "sonner"
 
 type Variant = {
   id: string
@@ -45,6 +46,43 @@ export function InventoryClient({
   const [editingStockId, setEditingStockId] = useState<string | null>(null)
   const [editingStockValue, setEditingStockValue] = useState<string>("")
   const [localData, setLocalData] = useState<Variant[]>(data)
+  const [bulkLoading, setBulkLoading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleBulkImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setBulkLoading(true)
+    try {
+      const text = await file.text()
+      const res = await fetch("/api/admin/inventory/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: text,
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(`Updated ${data.succeeded} variants${data.failed ? `, ${data.failed} failed` : ""}`)
+        router.refresh()
+      } else {
+        toast.error(data.error || "Import failed")
+      }
+    } catch {
+      toast.error("Failed to read file")
+    } finally {
+      setBulkLoading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ""
+    }
+  }
+
+  const downloadTemplate = () => {
+    const csv = "variantId,stock\n" + localData.slice(0, 3).map(v => `${v.id},${v.stock}`).join("\n")
+    const blob = new Blob([csv], { type: "text/csv" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url; a.download = "inventory-template.csv"; a.click()
+    URL.revokeObjectURL(url)
+  }
 
   const handleFilterChange = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams)
@@ -98,6 +136,24 @@ export function InventoryClient({
           <CardContent>
             <div className="text-2xl font-bold">{lowStockCount}</div>
             <p className="text-xs text-muted-foreground">Variants with less than 5 units</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Bulk Stock Update</CardTitle>
+            <Upload className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <p className="text-xs text-muted-foreground">Upload CSV: variantId, stock</p>
+            <div className="flex gap-2">
+              <button onClick={downloadTemplate} className="flex items-center gap-1 text-xs border rounded px-2 py-1 hover:bg-muted transition-colors">
+                <Download className="h-3 w-3" /> Template
+              </button>
+              <label className={`flex items-center gap-1 text-xs border rounded px-2 py-1 cursor-pointer hover:bg-muted transition-colors ${bulkLoading ? "opacity-50" : ""}`}>
+                <Upload className="h-3 w-3" /> {bulkLoading ? "Importing…" : "Import CSV"}
+                <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={handleBulkImport} disabled={bulkLoading} />
+              </label>
+            </div>
           </CardContent>
         </Card>
       </div>

@@ -4,6 +4,9 @@ import { Check, X, ShoppingBag, MapPin, CreditCard, Gift, Package, Truck, Home, 
 import Link from "next/link"
 import Image from "next/image"
 import { getBalance } from "@/lib/loyalty"
+import OrderMessages from "@/components/store/OrderMessages"
+import PurchaseTracker from "@/components/store/PurchaseTracker"
+import PostPurchaseUpsell from "@/components/store/PostPurchaseUpsell"
 
 const STATUS_STEPS = ["PENDING", "CONFIRMED", "PACKED", "SHIPPED", "DELIVERED"] as const
 
@@ -254,9 +257,30 @@ export default async function OrderConfirmationPage({
               </div>
             </section>
           )}
+
+          {/* Order Messages */}
+          <OrderMessages orderId={order.id} />
         </div>
       </div>
       
+      {payment !== "failed" && (
+        <PurchaseTracker order={{
+          id: order.id,
+          orderNumber: order.orderNumber,
+          total: Number(order.total),
+          items: order.items.map((i: any) => ({
+            productId: i.productId,
+            name: i.productName,
+            price: Number(i.price),
+            quantity: i.quantity,
+          })),
+        }} />
+      )}
+
+      {payment !== "failed" && (
+        <PostPurchaseUpsell orderTotal={Number(order.total)} />
+      )}
+
       <div className="mt-16 text-center border-t border-drip-border pt-12 flex items-center justify-center gap-8">
         <Link href={`/order/${order.id}/invoice`} className="inline-block text-xs font-bold uppercase tracking-widest border-b border-drip-black pb-1 hover:text-drip-gold hover:border-drip-gold transition-colors">
           Download Invoice

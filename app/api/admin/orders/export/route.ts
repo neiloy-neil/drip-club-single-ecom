@@ -9,13 +9,18 @@ export async function GET(req: NextRequest) {
   const status = req.nextUrl.searchParams.get("status") || ""
   const from = req.nextUrl.searchParams.get("from") || ""
   const to = req.nextUrl.searchParams.get("to") || ""
+  const ids = req.nextUrl.searchParams.get("ids") || ""
 
   const where: any = {}
-  if (status) where.status = status
-  if (from || to) {
-    where.createdAt = {}
-    if (from) where.createdAt.gte = new Date(from)
-    if (to) { const d = new Date(to); d.setHours(23, 59, 59, 999); where.createdAt.lte = d }
+  if (ids) {
+    where.id = { in: ids.split(",").filter(Boolean) }
+  } else {
+    if (status) where.status = status
+    if (from || to) {
+      where.createdAt = {}
+      if (from) where.createdAt.gte = new Date(from)
+      if (to) { const d = new Date(to); d.setHours(23, 59, 59, 999); where.createdAt.lte = d }
+    }
   }
 
   const orders = await prisma.order.findMany({

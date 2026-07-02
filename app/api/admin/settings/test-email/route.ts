@@ -23,15 +23,8 @@ export async function POST(req: Request) {
       secure: s.smtp_secure === "true",
       auth: { user: s.smtp_user, pass: s.smtp_pass },
     })
-  } else if (process.env.RESEND_API_KEY) {
-    transport = nodemailer.createTransport({
-      host: "smtp.resend.com",
-      port: 465,
-      secure: true,
-      auth: { user: "resend", pass: process.env.RESEND_API_KEY },
-    })
   } else {
-    return NextResponse.json({ error: "No email provider configured. Set SMTP settings or RESEND_API_KEY." }, { status: 400 })
+    return NextResponse.json({ error: "No SMTP configured. Fill in the Email settings first." }, { status: 400 })
   }
 
   const fromName = s.smtp_from_name || s.store_name || "DRIP"

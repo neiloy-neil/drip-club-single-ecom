@@ -25,17 +25,7 @@ async function createTransport() {
     })
   }
 
-  // Resend SMTP relay fallback
-  if (process.env.RESEND_API_KEY) {
-    return nodemailer.createTransport({
-      host: "smtp.resend.com",
-      port: 465,
-      secure: true,
-      auth: { user: "resend", pass: process.env.RESEND_API_KEY },
-    })
-  }
-
-  // No email configured — return null transport that logs instead of sending
+  // No SMTP configured — silent no-op transport
   return nodemailer.createTransport({ jsonTransport: true })
 }
 
@@ -277,57 +267,6 @@ export async function sendReturnUpdate(data: {
   await sendMail(data.to, `${label} — ${data.orderNumber}`, baseTemplate(store, content))
 }
 
-export async function sendBackInStockAlert(data: {
-  to: string
-  productName: string
-  productUrl: string
-  variantLabel: string
-}) {
-  const store = await getStoreMeta()
-  const content = `
-    <h1 style="font-size:22px;font-weight:700;margin-bottom:6px">Back in stock!</h1>
-    <p class="muted">Good news — an item on your watchlist just came back.</p>
-    <hr class="divider">
-    <div style="margin:20px 0">
-      <div style="font-size:18px;font-weight:600">${data.productName}</div>
-      <div class="muted" style="margin-top:4px">${data.variantLabel}</div>
-    </div>
-    <p class="muted">Stock is limited — grab it before it sells out again.</p>
-    <a href="${data.productUrl}" class="btn">Shop now →</a>`
-
-  await sendMail(data.to, `Back in stock: ${data.productName}`, baseTemplate(store, content))
-}
-
-export async function sendAbandonedCartEmail(data: {
-  to: string
-  customerName: string
-  cartItems: { name: string; size: string; color: string; quantity: number; price: number; image?: string }[]
-  cartTotal: number
-  recoveryUrl: string
-}) {
-  const store = await getStoreMeta()
-  const itemRows = data.cartItems.map((i) => `
-    <div class="item-row">
-      ${i.image ? `<img src="${i.image}" alt="${i.name}" style="width:56px;height:56px;object-fit:cover;border-radius:6px;margin-right:12px;flex-shrink:0">` : ""}
-      <div style="flex:1">
-        <div style="font-weight:500">${i.name}</div>
-        <div class="muted">${i.size} / ${i.color} &nbsp;×${i.quantity}</div>
-      </div>
-      <div style="font-weight:500">৳${(i.price * i.quantity).toLocaleString()}</div>
-    </div>`).join("")
-
-  const content = `
-    <h1 style="font-size:22px;font-weight:700;margin-bottom:6px">You left something behind</h1>
-    <p class="muted">Hi ${data.customerName}, you left ${data.cartItems.length} item${data.cartItems.length > 1 ? "s" : ""} in your bag.</p>
-    <hr class="divider">
-    ${itemRows}
-    <div class="total-final" style="margin-top:16px"><span>Total</span><span>৳${data.cartTotal.toLocaleString()}</span></div>
-    <a href="${data.recoveryUrl}" class="btn">Complete your order →</a>
-    <p class="muted" style="margin-top:16px">This link takes you straight back to checkout. Your bag is saved.</p>`
-
-  await sendMail(data.to, `Your bag is waiting — complete your ${store.name} order`, baseTemplate(store, content))
-}
-
 export async function sendGiftCardEmail(data: {
   to: string
   recipientName: string
@@ -447,3 +386,27 @@ export async function sendStoreCreditIssued(data: {
 
   await sendMail(data.to, `৳${data.amount.toLocaleString()} store credit added to your account`, baseTemplate(store, content))
 }
+
+export async function sendLowStockAlert(variants: { productName: string; size: string; color: string; stock: number; sku?: string | null }[]) {
+  const store = await getStoreMeta()
+  const adminEmail = store.email
+  const rows = variants.map(v =>
+    `<tr><td style="padding:8px;border-bottom:1px solid #f0f0e8">${v.productName}</td><td style="padding:8px;border-bottom:1px solid #f0f0e8">${v.size} / ${v.color}</td><td style="padding:8px;border-bottom:1px solid #f0f0e8;font-family:monospace">${v.sku || "-"}</td><td style="padding:8px;border-bottom:1px solid #f0f0e8;font-weight:700;color:${v.stock === 0 ? "#a32d2d" : "#7a5c00"}">${v.stock === 0 ? "OUT OF STOCK" : `${v.stock} left`}</td></tr>`
+  ).join("")
+  const content = `
+    <h1 style="font-size:20px;font-weight:700;margin-bottom:6px">⚠️ Low Stock Alert</h1>
+    <p class="muted">${variants.length} variant${variants.length !== 1 ? "s" : ""} need restocking.</p>
+    <hr class="divider">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:#f5f5f0">
+        <th style="padding:8px;text-align:left">Product</th>
+        <th style="padding:8px;text-align:left">Variant</th>
+        <th style="padding:8px;text-align:left">SKU</th>
+        <th style="padding:8px;text-align:left">Stock</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <a href="${store.url}/admin/inventory" class="btn">View Inventory →</a>`
+  await sendMail(adminEmail, `[${store.name}] Low stock alert — ${variants.length} variant${variants.length !== 1 ? "s" : ""}`, baseTemplate(store, content))
+}
+

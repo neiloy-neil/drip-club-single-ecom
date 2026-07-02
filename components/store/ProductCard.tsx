@@ -17,8 +17,10 @@ export default function ProductCard({
   const wishlisted = isWishlisted(product.id)
 
   const images = product.images || []
-  const thumbnail = images[0]?.url || "/placeholder.jpg"
+  const firstImage = images[0] || {}
+  const thumbnail = firstImage.url || "/placeholder.jpg"
   const hoverImage = images[1]?.url || thumbnail
+  const hoverVideo = firstImage.isVideo ? firstImage.videoUrl : (images[1]?.isVideo ? images[1]?.videoUrl : null)
 
   const isNew = (Date.now() - new Date(product.createdAt).getTime()) < 1000 * 60 * 60 * 24 * 7
   const hasSale = !!product.comparePrice || !!flashSalePrice
@@ -56,11 +58,19 @@ export default function ProductCard({
             alt={product.name}
             className="absolute inset-0 object-cover w-full h-full transition-opacity duration-500 group-hover:opacity-0"
           />
-          <img
-            src={hoverImage}
-            alt={product.name}
-            className="absolute inset-0 object-cover w-full h-full opacity-0 transition-opacity duration-500 group-hover:opacity-100"
-          />
+          {hoverVideo ? (
+            <video
+              src={hoverVideo}
+              autoPlay muted loop playsInline
+              className="absolute inset-0 object-cover w-full h-full opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+            />
+          ) : (
+            <img
+              src={hoverImage}
+              alt={product.name}
+              className="absolute inset-0 object-cover w-full h-full opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+            />
+          )}
         </Link>
 
         {/* Badges */}

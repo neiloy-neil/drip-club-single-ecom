@@ -1,43 +1,34 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
-import { requireAdmin } from "@/lib/auth"
+import { requireAdmin } from "@/lib/adminAuth"
 
 export async function GET() {
-  const session = await requireAdmin()
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const { error } = await requireAdmin()
+  if (error) return error
   const bundles = await prisma.bundle.findMany({
-    include: { items: { include: { product: { include: { images: { take: 1 } } } } } },
+    include: { items: { include: { product: { select: { name: true, images: { take: 1 } } } }, orderBy: { sortOrder: "asc" } } },
     orderBy: { createdAt: "desc" },
   })
-  return NextResponse.json(bundles)
+  return NextResponse.json({ bundles })
 }
 
 export async function POST(req: Request) {
-  const session = await requireAdmin()
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  const data = await req.json()
+  const { error } = await requireAdmin()
+  if (error) return error
+  const body = await req.json()
+  const { name, slug, description, price, comparePrice, image, isActive, type, minItems, maxItems, discountPct, items } = body
   const bundle = await prisma.bundle.create({
     data: {
-      name: data.name,
-      slug: data.slug || data.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-      description: data.description || null,
-      price: Number(data.price),
-      comparePrice: data.comparePrice ? Number(data.comparePrice) : null,
-      image: data.image || null,
-      type: data.type || "FIXED",
-      minItems: data.minItems ? Number(data.minItems) : null,
-      maxItems: data.maxItems ? Number(data.maxItems) : null,
-      discountPct: data.discountPct ? Number(data.discountPct) : null,
-      isActive: data.isActive ?? true,
+      name, slug, description, price, comparePrice: comparePrice || null, image: image || null,
+      isActive: isActive ?? true, type: type || "FIXED",
+      minItems: minItems || null, maxItems: maxItems || null, discountPct: discountPct || null,
       items: {
-        create: (data.items || []).map((item: { productId: string; quantity: number }, i: number) => ({
-          productId: item.productId,
-          quantity: item.quantity || 1,
-          sortOrder: i,
+        create: (items || []).map((item: any, i: number) => ({
+          productId: item.productId, quantity: item.quantity || 1, sortOrder: i,
         })),
       },
     },
     include: { items: true },
   })
-  return NextResponse.json(bundle)
+  return NextResponse.json({ bundle }, { status: 201 })
 }
