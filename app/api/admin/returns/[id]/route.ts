@@ -10,11 +10,42 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { id } = await params
   const { status, adminNote, refundAmount } = await req.json()
 
+  // Fetch current state so we can detect a transition to REFUNDED
+  const current = await prisma.returnRequest.findUnique({
+    where: { id },
+    select: { status: true, userId: true, orderId: true },
+  })
+  if (!current) return NextResponse.json({ error: "Not found" }, { status: 404 })
+
   const updated = await prisma.returnRequest.update({
     where: { id },
-    data: { status, adminNote: adminNote || null, refundAmount: refundAmount || null },
+    data: { status, adminNote: adminNote || null, refundAmount: refundAmount ? Number(refundAmount) : null },
     include: { order: { include: { user: { select: { email: true, name: true } } } } },
   })
+
+  // Auto-issue store credit when transitioning into REFUNDED
+  if (status === "REFUNDED" && current.status !== "REFUNDED" && current.userId && refundAmount) {
+    const amount = Number(refundAmount)
+    if (amount > 0) {
+      await prisma.$transaction([
+        prisma.storeCredit.upsert({
+          where: { userId: current.userId },
+          create: { userId: current.userId, balance: amount },
+          update: { balance: { increment: amount } },
+        }),
+        prisma.storeCreditTransaction.create({
+          data: {
+            userId: current.userId,
+            amount,
+            type: "CREDIT",
+            reason: `Refund for return on order #${updated.order.orderNumber}`,
+            orderId: current.orderId,
+            issuedBy: session.user.id,
+          },
+        }),
+      ])
+    }
+  }
 
   await logAudit({
     actorId: session.user.id,

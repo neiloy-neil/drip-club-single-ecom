@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { rateLimit } from "@/lib/rateLimit"
 
 export async function POST(req: Request) {
+  const limited = await rateLimit(req, "apply-coupon")
+  if (limited) return limited
   try {
     const { code, items } = await req.json()
     if (!code) return NextResponse.json({ error: "Coupon code required" }, { status: 400 })

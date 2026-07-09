@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { rateLimit } from "@/lib/rateLimit"
 
 export async function POST(req: Request) {
+  const limited = await rateLimit(req, "referral")
+  if (limited) return limited
   try {
     // Must be authenticated — no anonymous referral claims
     const session = await auth()

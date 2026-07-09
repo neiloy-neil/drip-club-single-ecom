@@ -13,8 +13,11 @@ import { sendSms, smsTemplates } from "@/lib/sms"
 import { runWorkflows } from "@/lib/workflowEngine"
 import { auth } from "@/lib/auth"
 import { getActiveFlashSaleBatch, applyFlashSaleDiscount } from "@/lib/flashSale"
+import { rateLimit } from "@/lib/rateLimit"
 
 export async function POST(req: Request) {
+  const limited = await rateLimit(req, "checkout")
+  if (limited) return limited
   try {
     const body = await req.json()
     const { items, address, paymentMethod, subtotal, shippingCharge, total, userId,
