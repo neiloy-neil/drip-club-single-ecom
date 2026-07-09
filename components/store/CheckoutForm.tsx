@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import { useCartStore } from "@/store/useCartStore"
 import { useRouter } from "next/navigation"
@@ -56,6 +56,9 @@ export default function CheckoutForm({
   const [address, setAddress] = useState({ name: "", phone: "", division: "", district: "", area: "", fullAddress: "" })
   const [guestEmail, setGuestEmail] = useState("")
   const [isGuest, setIsGuest] = useState(false)
+  const [savedAddresses, setSavedAddresses] = useState<any[]>([])
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null)
+  const [expressReady, setExpressReady] = useState(false)
 
   // Step 2 — payment
   const [paymentMethod, setPaymentMethod] = useState(
@@ -90,6 +93,25 @@ export default function CheckoutForm({
 
   // Referral code
   const [referralCode, setReferralCode] = useState("")
+
+  // Express checkout: pre-fill saved address for logged-in users
+  useEffect(() => {
+    if (!userId) return
+    fetch("/api/user/addresses")
+      .then(r => r.json())
+      .then(d => {
+        const addrs = d.addresses || []
+        if (!addrs.length) return
+        setSavedAddresses(addrs)
+        const def = addrs.find((a: any) => a.isDefault) || addrs[0]
+        setSelectedAddressId(def.id)
+        setAddress({ name: def.fullName, phone: def.phone, division: def.division, district: def.district, area: def.area, fullAddress: def.address })
+        setExpressReady(true)
+        setStep(2)
+        trackInitiateCheckout(0, 0)
+      })
+      .catch(() => {})
+  }, [userId])
 
   const subtotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0)
   const shippingCharge = subtotal >= freeShippingThreshold ? 0 : shippingChargeAmount
@@ -324,6 +346,19 @@ export default function CheckoutForm({
           )}
           {step > 1 && (
             <div className="p-6 text-sm text-drip-text-muted">
+              {expressReady && savedAddresses.length > 1 && (
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {savedAddresses.map((a: any) => (
+                    <button
+                      key={a.id}
+                      onClick={() => { setSelectedAddressId(a.id); setAddress({ name: a.fullName, phone: a.phone, division: a.division, district: a.district, area: a.area, fullAddress: a.address }) }}
+                      className={`text-[11px] px-3 py-1.5 rounded-full border transition-all ${selectedAddressId === a.id ? "border-drip-black bg-drip-black text-white" : "border-drip-border text-drip-text-muted hover:border-drip-gold"}`}
+                    >
+                      {a.label || "Address"}
+                    </button>
+                  ))}
+                </div>
+              )}
               <p className="font-medium text-drip-black">{address.name} ({address.phone})</p>
               <p>{address.fullAddress}, {address.area}, {address.district}, {address.division}</p>
               {isGuest && guestEmail && <p className="text-drip-gold mt-1 text-xs">Guest: {guestEmail}</p>}

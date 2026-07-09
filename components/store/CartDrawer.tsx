@@ -2,17 +2,42 @@
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
-import { ShoppingBag, Minus, Plus, Trash2, Tag, ChevronRight } from "lucide-react"
+import { ShoppingBag, Minus, Plus, Trash2, Tag, ChevronRight, Zap } from "lucide-react"
 import { useCartStore } from "@/store/useCartStore"
 import Link from "next/link"
 import Image from "next/image"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Switch } from "@/components/ui/switch"
+import { toast } from "sonner"
+
+type CartBump = {
+  id: string
+  headline: string
+  discountPct: number
+  product: {
+    id: string
+    name: string
+    slug: string
+    price: number
+    images: { url: string }[]
+    variants: { id: string; size: string; color: string; stock: number }[]
+  }
+}
 
 export default function CartDrawer({ itemCount: propItemCount, freeShippingThreshold = 1000 }: { itemCount?: number, freeShippingThreshold?: number }) {
-  const { items, removeItem, updateQuantity } = useCartStore()
+  const { items, removeItem, updateQuantity, addItem } = useCartStore()
   const [isOpen, setIsOpen] = useState(false)
+  const [bump, setBump] = useState<CartBump | null>(null)
+  const [bumpAdded, setBumpAdded] = useState(false)
   const [coupon, setCoupon] = useState("")
+
+  useEffect(() => {
+    if (!isOpen || bump) return
+    fetch("/api/store/order-bumps")
+      .then(r => r.json())
+      .then(d => { if (d.bumps?.length) setBump(d.bumps[0]) })
+      .catch(() => {})
+  }, [isOpen])
   const [useLoyalty, setUseLoyalty] = useState(false)
 
   const subtotal = items.reduce((acc, item) => acc + (item.price * item.quantity), 0)
@@ -160,6 +185,43 @@ export default function CartDrawer({ itemCount: propItemCount, freeShippingThres
               </div>
             </div>
             
+            {/* Cart upsell */}
+            {bump && !bumpAdded && items.length > 0 && (() => {
+              const discountedPrice = Math.round(Number(bump.product.price) * (1 - bump.discountPct / 100))
+              const variant = bump.product.variants.find(v => v.stock > 0) || bump.product.variants[0]
+              if (!variant) return null
+              return (
+                <div className="border border-drip-gold/40 rounded-xl overflow-hidden bg-drip-gold/5">
+                  <div className="bg-drip-gold/10 px-3 py-1.5 flex items-center gap-1.5">
+                    <Zap className="w-3 h-3 text-drip-gold fill-drip-gold" />
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-drip-black">Add to your order</span>
+                  </div>
+                  <div className="p-3 flex gap-3 items-center">
+                    <div className="relative h-14 w-11 shrink-0 rounded overflow-hidden bg-drip-muted">
+                      <Image src={bump.product.images[0]?.url || "/placeholder.jpg"} alt={bump.product.name} fill sizes="44px" className="object-cover" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold line-clamp-1">{bump.headline}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="font-mono text-sm font-bold text-drip-gold">৳{discountedPrice.toLocaleString()}</span>
+                        {bump.discountPct > 0 && <span className="font-mono text-xs text-drip-text-muted line-through">৳{Number(bump.product.price).toLocaleString()}</span>}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        addItem({ id: variant.id, variantId: variant.id, productId: bump.product.id, productSlug: bump.product.slug, name: bump.product.name, size: variant.size, color: variant.color, price: discountedPrice, image: bump.product.images[0]?.url || "", quantity: 1 })
+                        setBumpAdded(true)
+                        toast.success("Added!")
+                      }}
+                      className="shrink-0 px-3 py-1.5 bg-drip-black text-white text-[11px] font-bold rounded-full hover:bg-drip-gold transition-colors"
+                    >
+                      + Add
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
+
             <div className="space-y-3">
               <Link href="/checkout" onClick={() => setIsOpen(false)} className="block">
                 <button className="w-full py-4 bg-drip-black text-white font-bold uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-drip-gold hover:shadow-lg hover:shadow-drip-gold/20 transition-all duration-300 rounded-lg">

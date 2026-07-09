@@ -31,6 +31,21 @@ export default function OrderDetailsClient({
   const [msgText, setMsgText] = useState("")
   const [msgLoading, setMsgLoading] = useState(false)
   const codVerified = tags.includes("cod-verified")
+  const [codNote, setCodNote] = useState<string>(initialOrder.codCallNote || "")
+  const [codNoteSaving, setCodNoteSaving] = useState(false)
+
+  const saveCodNote = async () => {
+    setCodNoteSaving(true)
+    try {
+      await fetch(`/api/admin/orders/${order.id}/cod-note`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ codCallNote: codNote }),
+      })
+      toast.success("Call note saved")
+    } catch { toast.error("Failed to save") }
+    finally { setCodNoteSaving(false) }
+  }
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [deliveryData, setDeliveryData] = useState({
     courier: order.delivery?.courier || "PATHAO",
@@ -294,6 +309,19 @@ export default function OrderDetailsClient({
                   {codVerified ? "✓ Phone call verified" : "Mark as phone-verified"}
                 </button>
                 <p className="text-[11px] text-muted-foreground mt-2 text-center">Confirm customer intent before processing COD order</p>
+                <div className="mt-3 space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">Call log / notes</label>
+                  <textarea
+                    rows={3}
+                    value={codNote}
+                    onChange={e => setCodNote(e.target.value)}
+                    placeholder="e.g. Customer confirmed, asked to deliver after 6pm…"
+                    className="w-full text-xs rounded-md border border-input bg-transparent px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                  <Button size="sm" variant="outline" className="w-full h-7 text-xs" onClick={saveCodNote} disabled={codNoteSaving}>
+                    {codNoteSaving ? "Saving…" : "Save note"}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           )}

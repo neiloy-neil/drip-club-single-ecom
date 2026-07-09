@@ -249,6 +249,7 @@ model Order {
   depositPaid     Boolean       @default(false)
   isGuest         Boolean       @default(false)
   guestEmail      String?
+  codCallNote     String?       // admin call log for COD verification
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
