@@ -388,6 +388,50 @@ export async function sendStoreCreditIssued(data: {
   await sendMail(data.to, `৳${data.amount.toLocaleString()} store credit added to your account`, baseTemplate(store, content))
 }
 
+export async function sendAbandonedCartEmail({
+  to, customerName, items, subtotal, sequence, couponCode,
+}: {
+  to: string
+  customerName?: string | null
+  items: { name: string; size?: string; color?: string; quantity: number; price: number }[]
+  subtotal: number
+  sequence: 1 | 2 | 3
+  couponCode?: string | null
+}) {
+  const store = await getStoreMeta()
+  const greeting = customerName ? `Hi ${customerName.split(" ")[0]},` : "Hey there,"
+  const headlines: Record<number, string> = {
+    1: "You left something behind",
+    2: "Your cart is still waiting",
+    3: "Last chance — your cart expires soon",
+  }
+  const sublines: Record<number, string> = {
+    1: "You started shopping but didn't finish. Your items are still saved.",
+    2: "Just a reminder — your bag is packed and ready. Complete your order before it sells out.",
+    3: "This is your final reminder. Items in your cart may sell out soon.",
+  }
+  const itemRows = items.slice(0, 3).map(i =>
+    `<div class="item-row"><div><div style="font-weight:500">${i.name}</div><div class="muted">${[i.size, i.color].filter(Boolean).join(" / ")} ×${i.quantity}</div></div><div style="font-weight:500;white-space:nowrap">৳${(i.price * i.quantity).toLocaleString()}</div></div>`
+  ).join("")
+  const couponBlock = couponCode
+    ? `<div class="alert"><strong>Use code <span style="font-family:monospace;font-size:15px">${couponCode}</span> for an extra discount</strong> when you complete your order.</div>`
+    : ""
+  const content = `
+    <h1 style="font-size:22px;font-weight:700;margin-bottom:6px">${headlines[sequence]}</h1>
+    <p class="muted">${greeting} ${sublines[sequence]}</p>
+    <hr class="divider">
+    ${itemRows}
+    <div style="margin-top:16px" class="total-final"><span>Subtotal</span><span>৳${subtotal.toLocaleString()}</span></div>
+    ${couponBlock}
+    <a href="${store.url}/cart" class="btn">Complete your purchase →</a>`
+  const subjects: Record<number, string> = {
+    1: `You left something in your cart`,
+    2: `Your cart is still waiting for you`,
+    3: `Last chance — complete your order`,
+  }
+  await sendMail(to, subjects[sequence], baseTemplate(store, content))
+}
+
 export async function sendBackInStockAlert({ to, productName, variantLabel, productUrl }: { to: string; productName: string; variantLabel: string; productUrl: string }) {
   const store = await getStoreMeta()
   const content = `

@@ -438,6 +438,15 @@ export async function POST(req: Request) {
       userId: userId || null,
     }).catch(() => {})
 
+    // Mark abandoned cart as recovered (fire-and-forget)
+    const recoveryEmail = toEmail || guestEmail
+    if (recoveryEmail) {
+      prisma.abandonedCart.updateMany({
+        where: { email: recoveryEmail, isRecovered: false },
+        data: { isRecovered: true, recoveredAt: new Date(), orderId: order.id },
+      }).catch(() => {})
+    }
+
     return NextResponse.json({ orderId: order.id, depositAmount })
   } catch (error: any) {
     console.error("Checkout error", error)
