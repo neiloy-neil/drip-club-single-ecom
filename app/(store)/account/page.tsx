@@ -4,9 +4,26 @@ import { useState, useEffect } from "react"
 import Image from "next/image"
 import { useSession, signOut } from "@/hooks/useSession"
 import { useRouter } from "next/navigation"
-import { User, Package, MapPin, Gift, LogOut, Wallet, Link2 } from "lucide-react"
+import { User, Package, MapPin, Gift, LogOut, Wallet, Link2, RotateCcw, X } from "lucide-react"
 import { toast } from "sonner"
 import AddressList from "@/components/store/account/AddressList"
+
+const RETURN_REASONS: { value: string; label: string }[] = [
+  { value: "WRONG_SIZE", label: "Wrong size" },
+  { value: "DEFECTIVE", label: "Defective / damaged" },
+  { value: "WRONG_ITEM", label: "Wrong item received" },
+  { value: "CHANGED_MIND", label: "Changed my mind" },
+  { value: "QUALITY_ISSUE", label: "Quality issue" },
+  { value: "OTHER", label: "Other" },
+]
+
+const RETURN_STATUS_COLORS: Record<string, string> = {
+  PENDING: "bg-yellow-100 text-yellow-800",
+  APPROVED: "bg-blue-100 text-blue-800",
+  REJECTED: "bg-red-100 text-red-800",
+  RECEIVED: "bg-purple-100 text-purple-800",
+  REFUNDED: "bg-green-100 text-green-800",
+}
 
 export default function AccountPage() {
   const { data: session, status } = useSession()
@@ -17,6 +34,14 @@ export default function AccountPage() {
   const [storeCreditBalance, setStoreCreditBalance] = useState(0)
   const [affiliate, setAffiliate] = useState<any>(null)
   const [ordersLoading, setOrdersLoading] = useState(true)
+  const [myReturns, setMyReturns] = useState<any[]>([])
+  const [returnsLoading, setReturnsLoading] = useState(false)
+  // Return request modal state
+  const [returnOrder, setReturnOrder] = useState<any>(null)
+  const [returnSelections, setReturnSelections] = useState<Record<string, number>>({})
+  const [returnReason, setReturnReason] = useState("WRONG_SIZE")
+  const [returnNote, setReturnNote] = useState("")
+  const [submittingReturn, setSubmittingReturn] = useState(false)
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -41,6 +66,51 @@ export default function AccountPage() {
     fetch("/api/account/store-credit").then(r => r.json()).then(d => setStoreCreditBalance(d.balance || 0)).catch(() => {})
     fetch("/api/account/affiliate").then(r => r.json()).then(d => setAffiliate(d.affiliate || null)).catch(() => {})
   }, [status])
+
+  // Fetch returns when tab is opened
+  useEffect(() => {
+    if (activeTab !== "returns" || status !== "authenticated") return
+    setReturnsLoading(true)
+    fetch("/api/account/returns")
+      .then(r => r.json())
+      .then(d => { setMyReturns(d.returns || []); setReturnsLoading(false) })
+      .catch(() => setReturnsLoading(false))
+  }, [activeTab, status])
+
+  function openReturnModal(order: any) {
+    setReturnOrder(order)
+    setReturnSelections({})
+    setReturnReason("WRONG_SIZE")
+    setReturnNote("")
+  }
+
+  function toggleReturnItem(itemId: string, maxQty: number) {
+    setReturnSelections(prev =>
+      prev[itemId] ? (({ [itemId]: _, ...rest }) => rest)(prev) : { ...prev, [itemId]: maxQty }
+    )
+  }
+
+  async function submitReturn() {
+    if (!returnOrder) return
+    const selectedItems = Object.entries(returnSelections).map(([orderItemId, quantity]) => ({ orderItemId, quantity }))
+    if (!selectedItems.length) { toast.error("Select at least one item to return"); return }
+    setSubmittingReturn(true)
+    try {
+      const res = await fetch("/api/store/returns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: returnOrder.id, items: selectedItems, reason: returnReason, note: returnNote || null }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Failed to submit")
+      toast.success("Return request submitted! We'll review it shortly.")
+      setReturnOrder(null)
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setSubmittingReturn(false)
+    }
+  }
 
   async function handleSignOut() {
     await signOut({ callbackUrl: "/" })
@@ -94,6 +164,7 @@ export default function AccountPage() {
         <div className="w-full md:w-64 shrink-0 space-y-1">
           {[
             { key: "orders", label: "My Orders", icon: Package },
+            { key: "returns", label: "My Returns", icon: RotateCcw },
             { key: "profile", label: "Profile Details", icon: User },
             { key: "addresses", label: "Saved Addresses", icon: MapPin },
           ].map(({ key, label, icon: Icon }) => (
@@ -189,6 +260,14 @@ export default function AccountPage() {
                         <p className="text-xs text-drip-text-muted uppercase tracking-widest font-bold">Order #</p>
                         <p className="font-mono mt-0.5">{order.orderNumber}</p>
                       </div>
+                      {order.status === "DELIVERED" && (
+                        <button
+                          onClick={() => openReturnModal(order)}
+                          className="text-xs text-drip-text-muted underline underline-offset-2 hover:text-drip-black transition-colors"
+                        >
+                          Request Return
+                        </button>
+                      )}
                     </div>
                     {order.items?.slice(0, 1).map((item: any) => (
                       <div key={item.id} className="p-6 flex gap-4">
@@ -295,6 +374,63 @@ export default function AccountPage() {
             </div>
           )}
 
+          {activeTab === "returns" && (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-heading font-bold">My Returns</h2>
+              {returnsLoading ? (
+                <div className="text-drip-text-muted text-sm">Loading...</div>
+              ) : myReturns.length === 0 ? (
+                <div className="text-center py-16 space-y-3 bg-drip-muted/30 rounded-2xl border border-drip-border">
+                  <RotateCcw className="w-10 h-10 mx-auto text-drip-border" />
+                  <p className="text-drip-text-muted text-sm">No return requests yet.</p>
+                  <p className="text-xs text-drip-text-muted">You can request a return from a delivered order in the Orders tab.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {myReturns.map((r: any) => (
+                    <div key={r.id} className="border border-drip-border rounded-2xl overflow-hidden bg-white">
+                      <div className="bg-drip-muted/30 px-6 py-4 flex flex-wrap items-center justify-between gap-3 border-b border-drip-border text-sm">
+                        <div>
+                          <p className="text-xs text-drip-text-muted uppercase tracking-widest font-bold">Order #</p>
+                          <p className="font-mono mt-0.5">{r.order.orderNumber}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-drip-text-muted uppercase tracking-widest font-bold">Reason</p>
+                          <p className="mt-0.5">{RETURN_REASONS.find(x => x.value === r.reason)?.label ?? r.reason}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-drip-text-muted uppercase tracking-widest font-bold">Submitted</p>
+                          <p className="mt-0.5">{new Date(r.createdAt).toLocaleDateString("en-BD")}</p>
+                        </div>
+                        <span className={`text-xs font-bold px-3 py-1 rounded-full ${RETURN_STATUS_COLORS[r.status] || "bg-gray-100 text-gray-600"}`}>
+                          {r.status}
+                        </span>
+                      </div>
+                      <div className="px-6 py-4 space-y-2">
+                        {r.items.map((i: any) => (
+                          <div key={i.id} className="flex justify-between text-sm">
+                            <span>{i.orderItem.productName} — {i.orderItem.size} / {i.orderItem.color}</span>
+                            <span className="text-drip-text-muted">×{i.quantity}</span>
+                          </div>
+                        ))}
+                        {r.adminNote && (
+                          <p className="text-xs text-drip-text-muted mt-2 pt-2 border-t border-drip-border">
+                            <span className="font-bold">Store note:</span> {r.adminNote}
+                          </p>
+                        )}
+                        {r.status === "REFUNDED" && r.refundAmount && (
+                          <p className="text-sm font-bold text-green-700 mt-2">
+                            ৳{Number(r.refundAmount).toLocaleString()} store credit issued to your account.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {activeTab === "loyalty" && (
             <div className="space-y-8">
               <h2 className="text-2xl font-heading font-bold">DRIP Club Rewards</h2>
@@ -330,6 +466,76 @@ export default function AccountPage() {
           )}
         </div>
       </div>
+
+      {/* Return Request Modal */}
+      {returnOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={() => setReturnOrder(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-5 border-b border-drip-border">
+              <h3 className="font-heading font-bold text-lg">Request Return — {returnOrder.orderNumber}</h3>
+              <button onClick={() => setReturnOrder(null)} className="text-drip-text-muted hover:text-drip-black transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-5">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-drip-text-muted mb-3">Select items to return</p>
+                <div className="space-y-2">
+                  {returnOrder.items?.map((item: any) => (
+                    <label key={item.id} className={`flex items-center justify-between gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${returnSelections[item.id] ? "border-drip-black bg-drip-muted/40" : "border-drip-border hover:border-drip-black/40"}`}>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={!!returnSelections[item.id]}
+                          onChange={() => toggleReturnItem(item.id, item.quantity)}
+                          className="accent-drip-black w-4 h-4"
+                        />
+                        <div>
+                          <p className="text-sm font-medium">{item.productName}</p>
+                          <p className="text-xs text-drip-text-muted">{item.size} / {item.color}</p>
+                        </div>
+                      </div>
+                      <span className="text-xs text-drip-text-muted">×{item.quantity}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-widest text-drip-text-muted block mb-2">Reason</label>
+                <select
+                  value={returnReason}
+                  onChange={e => setReturnReason(e.target.value)}
+                  className="w-full bg-drip-muted border border-transparent focus:border-drip-gold focus:bg-white rounded-lg px-4 py-3 text-sm outline-none transition-all"
+                >
+                  {RETURN_REASONS.map(r => (
+                    <option key={r.value} value={r.value}>{r.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-widest text-drip-text-muted block mb-2">Additional note (optional)</label>
+                <textarea
+                  value={returnNote}
+                  onChange={e => setReturnNote(e.target.value)}
+                  rows={3}
+                  placeholder="Describe the issue..."
+                  className="w-full bg-drip-muted border border-transparent focus:border-drip-gold focus:bg-white rounded-lg px-4 py-3 text-sm outline-none transition-all resize-none"
+                />
+              </div>
+              <button
+                onClick={submitReturn}
+                disabled={submittingReturn || Object.keys(returnSelections).length === 0}
+                className="w-full py-4 bg-drip-black text-white font-bold uppercase tracking-widest rounded-full hover:bg-drip-gold transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {submittingReturn ? "Submitting..." : "Submit Return Request"}
+              </button>
+              <p className="text-xs text-drip-text-muted text-center">
+                We'll review your request and respond within 2–3 business days.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
