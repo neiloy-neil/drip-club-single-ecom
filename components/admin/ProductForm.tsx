@@ -291,11 +291,11 @@ export default function ProductForm({ initialData, categories }: { initialData?:
                 {errors.categoryId && <p className="text-xs text-red-500">{errors.categoryId.message as string}</p>}
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Price</label>
+                <label className="text-sm font-medium">Sale Price</label>
                 <input type="number" step="0.01" {...register("price")} className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Compare Price</label>
+                <label className="text-sm font-medium">Original Price <span className="text-xs font-normal text-muted-foreground">(shown crossed out)</span></label>
                 <input type="number" step="0.01" {...register("comparePrice")} className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
               </div>
               <div className="space-y-2">

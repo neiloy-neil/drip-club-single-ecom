@@ -130,7 +130,7 @@ export default function ProductCard({
           {(hasSale || hasFlashSale) && (
             <>
               <span className="font-mono text-xs text-drip-text-muted line-through">
-                ৳{Number(product.price).toLocaleString()}
+                ৳{hasFlashSale ? Number(product.price).toLocaleString() : Number(product.comparePrice).toLocaleString()}
               </span>
               <span className="text-[10px] text-drip-success font-bold bg-drip-success/10 px-1.5 py-0.5 rounded">
                 -{discountPercent}%
