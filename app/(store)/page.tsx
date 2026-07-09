@@ -9,9 +9,18 @@ export default async function StoreHomepage() {
   const [banners, categories, newArrivals, featuredProducts] = await Promise.all([
     prisma.banner.findMany({ where: { isActive: true }, orderBy: { sortOrder: 'asc' } }).catch(() => []),
     prisma.category.findMany({ where: { isActive: true }, take: 5, orderBy: { sortOrder: 'asc' } }).catch(() => []),
-    prisma.product.findMany({ where: { isActive: true }, include: { category: true, images: true }, take: 8, orderBy: { createdAt: 'desc' } }).catch(() => []),
-    prisma.product.findMany({ where: { isActive: true, isFeatured: true }, include: { category: true, images: true }, take: 4, orderBy: { createdAt: 'desc' } }).catch(() => [])
+    prisma.product.findMany({ where: { isActive: true }, include: { category: true, images: true, variants: true }, take: 8, orderBy: { createdAt: 'desc' } }).catch(() => []),
+    prisma.product.findMany({ where: { isActive: true, isFeatured: true }, include: { category: true, images: true, variants: true }, take: 4, orderBy: { createdAt: 'desc' } }).catch(() => [])
   ]);
+
+  const allProductIds = [...new Set([...newArrivals.map((p: any) => p.id), ...featuredProducts.map((p: any) => p.id)])]
+  const reviewAggs = allProductIds.length ? await prisma.review.groupBy({
+    by: ['productId'],
+    where: { productId: { in: allProductIds }, isApproved: true },
+    _avg: { rating: true },
+    _count: { rating: true },
+  }).catch(() => []) : []
+  const reviewMap = Object.fromEntries(reviewAggs.map((r: any) => [r.productId, r]))
 
   const heroBanner = banners[0] || {
     title: "Wear Your Story",
@@ -94,7 +103,7 @@ export default async function StoreHomepage() {
           </Link>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-10">
-          {serialize(newArrivals).map((product: any) => <ProductCard key={product.id} product={product} />)}
+          {serialize(newArrivals).map((product: any) => <ProductCard key={product.id} product={product} avgRating={reviewMap[product.id]?._avg?.rating} reviewCount={reviewMap[product.id]?._count?.rating} />)}
         </div>
       </section>
 
@@ -128,7 +137,7 @@ export default async function StoreHomepage() {
           <div className="flex overflow-x-auto md:grid md:grid-cols-4 gap-4 pb-8 md:pb-0 hide-scrollbar snap-x">
             {serialize(featuredProducts).map((product: any) => (
               <div key={product.id} className="min-w-[280px] md:min-w-0 snap-center">
-                <ProductCard product={product} />
+                <ProductCard product={product} avgRating={reviewMap[product.id]?._avg?.rating} reviewCount={reviewMap[product.id]?._count?.rating} />
               </div>
             ))}
           </div>

@@ -78,9 +78,16 @@ export default async function ShopPage({
 
   const hasMore = totalProducts > take
 
-  const flashSaleMap = await getActiveFlashSaleBatch(
-    products.map((p: any) => ({ id: p.id, categoryId: p.categoryId }))
-  ).catch(() => new Map())
+  const [flashSaleMap, reviewAggs] = await Promise.all([
+    getActiveFlashSaleBatch(products.map((p: any) => ({ id: p.id, categoryId: p.categoryId }))).catch(() => new Map()),
+    prisma.review.groupBy({
+      by: ['productId'],
+      where: { productId: { in: products.map((p: any) => p.id) }, isApproved: true },
+      _avg: { rating: true },
+      _count: { rating: true },
+    }).catch(() => []),
+  ])
+  const reviewMap = Object.fromEntries(reviewAggs.map((r: any) => [r.productId, r]))
 
   const current = { categoryId, brandId, size, color, sort, view, minPrice, maxPrice, sale: params.sale || "", search, take: params.take || "12" }
 
@@ -175,6 +182,8 @@ export default async function ShopPage({
                               : `৳${sale.discountValue} off`
                             : undefined
                         }
+                        avgRating={reviewMap[product.id]?._avg?.rating}
+                        reviewCount={reviewMap[product.id]?._count?.rating}
                       />
                     )
                   })}

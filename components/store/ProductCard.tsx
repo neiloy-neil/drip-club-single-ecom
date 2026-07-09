@@ -1,6 +1,6 @@
 "use client"
 import Link from "next/link"
-import { Heart, ShoppingBag } from "lucide-react"
+import { Heart, ShoppingBag, Star } from "lucide-react"
 import { useWishlistStore } from "@/store/useWishlistStore"
 import { toast } from "sonner"
 
@@ -8,10 +8,14 @@ export default function ProductCard({
   product,
   flashSalePrice,
   flashSaleLabel,
+  avgRating,
+  reviewCount,
 }: {
   product: any
   flashSalePrice?: number
   flashSaleLabel?: string
+  avgRating?: number | null
+  reviewCount?: number | null
 }) {
   const { toggleItem, isWishlisted } = useWishlistStore()
   const wishlisted = isWishlisted(product.id)
@@ -109,6 +113,16 @@ export default function ProductCard({
         <Link href={`/shop/${product.slug}`} className="font-medium text-sm line-clamp-1 group-hover:text-drip-gold transition-colors">
           {product.name}
         </Link>
+        {reviewCount != null && reviewCount > 0 && avgRating != null && (
+          <div className="flex items-center gap-1 mt-0.5">
+            <div className="flex items-center gap-0.5">
+              {[1,2,3,4,5].map(n => (
+                <Star key={n} className={`w-3 h-3 ${n <= Math.round(avgRating) ? "fill-drip-gold text-drip-gold" : "text-drip-border"}`} />
+              ))}
+            </div>
+            <span className="text-[10px] text-drip-text-muted">({reviewCount})</span>
+          </div>
+        )}
         <div className="flex items-center gap-2 mt-0.5">
           <span className={`font-mono font-medium text-sm ${hasFlashSale ? "text-drip-error" : ""}`}>
             ৳{displayPrice.toLocaleString()}
