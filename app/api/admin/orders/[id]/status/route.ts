@@ -13,6 +13,24 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const body = await req.json()
     const { status, paymentStatus } = body
 
+    const VALID_STATUSES = ["PENDING","CONFIRMED","PACKED","SHIPPED","DELIVERED","CANCELLED","RETURNED"]
+    const VALID_PAYMENT_STATUSES = ["UNPAID","PARTIAL","PAID","REFUNDED"]
+    // Prevent rewinding past terminal states
+    const TERMINAL = ["DELIVERED", "CANCELLED", "RETURNED"]
+
+    if (status) {
+      if (!VALID_STATUSES.includes(status)) {
+        return NextResponse.json({ error: `Invalid status: ${status}` }, { status: 400 })
+      }
+      const current = await prisma.order.findUnique({ where: { id }, select: { status: true } })
+      if (current && TERMINAL.includes(current.status) && current.status !== status) {
+        return NextResponse.json({ error: `Cannot change status from ${current.status}` }, { status: 400 })
+      }
+    }
+    if (paymentStatus && !VALID_PAYMENT_STATUSES.includes(paymentStatus)) {
+      return NextResponse.json({ error: `Invalid payment status: ${paymentStatus}` }, { status: 400 })
+    }
+
     const updateData: any = {}
     if (status) updateData.status = status
     if (paymentStatus) {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { requireAdmin } from "@/lib/adminAuth"
+import { logAudit } from "@/lib/auditLog"
 
 // POST /api/admin/inventory/bulk
 // Body: { rows: [{ variantId: string, stock: number }] }
@@ -42,7 +43,19 @@ export async function POST(req: Request) {
   )
 
   const succeeded = results.filter(r => r.status === "fulfilled").length
-  const failed = results.filter(r => r.status === "rejected").length
+  const failedRows = rows.filter((_, i) => results[i].status === "rejected")
 
-  return NextResponse.json({ succeeded, failed, total: rows.length })
+  logAudit({
+    action: "inventory.bulk_update",
+    entityType: "ProductVariant",
+    entityId: "bulk",
+    after: { succeeded, failed: failedRows.length, total: rows.length },
+  }).catch(() => {})
+
+  return NextResponse.json({
+    succeeded,
+    failed: failedRows.length,
+    total: rows.length,
+    failedVariantIds: failedRows.map(r => r.variantId),
+  })
 }

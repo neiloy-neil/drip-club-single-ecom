@@ -11,6 +11,8 @@ import { mailchimpAddTags } from "@/lib/mailchimp"
 import { klaviyoOrderPlaced } from "@/lib/klaviyo"
 import { sendSms, smsTemplates } from "@/lib/sms"
 import { runWorkflows } from "@/lib/workflowEngine"
+import { auth } from "@/lib/auth"
+import { getActiveFlashSaleBatch, applyFlashSaleDiscount } from "@/lib/flashSale"
 
 export async function POST(req: Request) {
   try {
@@ -24,6 +26,14 @@ export async function POST(req: Request) {
     if (!items?.length || !address || !paymentMethod) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
+
+    // #5 IDOR guard: if a userId is claimed, verify it matches the authenticated session
+    const session = await auth()
+    if (userId && session?.user?.id && userId !== session.user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
+    }
+    // If no session, treat as guest regardless of what the client sent
+    const verifiedUserId: string | null = session?.user?.id || null
 
     // Determine if a COD deposit is required: either store-wide policy, or
     // this phone number has a poor delivery track record on our own orders.
@@ -45,7 +55,7 @@ export async function POST(req: Request) {
     const variantIds = items.map((i: any) => i.variantId)
     const variants = await prisma.productVariant.findMany({
       where: { id: { in: variantIds } },
-      include: { product: { select: { price: true, isActive: true } } },
+      include: { product: { select: { price: true, isActive: true, id: true, categoryId: true } } },
     })
 
     const variantMap = Object.fromEntries(variants.map((v) => [v.id, v]))
@@ -62,10 +72,21 @@ export async function POST(req: Request) {
       }
     }
 
-    // Compute server-side totals from DB prices + fetch tax settings
+    // #1 Flash sale: resolve active sales for all products server-side
+    const flashSaleMap = await getActiveFlashSaleBatch(
+      variants.map(v => ({ id: v.product.id, categoryId: v.product.categoryId || "" }))
+    ).catch(() => new Map())
+    // Build productId → effective price map
+    const effectivePriceMap = Object.fromEntries(
+      variants.map(v => [
+        v.id,
+        applyFlashSaleDiscount(Number(v.product.price), flashSaleMap.get(v.product.id) ?? null),
+      ])
+    )
+
+    // Compute server-side totals from DB prices (with flash sale applied)
     const serverSubtotal = items.reduce((sum: number, item: any) => {
-      const variant = variantMap[item.variantId]
-      return sum + Number(variant.product.price) * item.quantity
+      return sum + effectivePriceMap[item.variantId] * item.quantity
     }, 0)
 
     const [taxEnabledSetting, taxRateSetting] = await Promise.all([
@@ -97,8 +118,8 @@ export async function POST(req: Request) {
 
       // Per-user usage limit check
       let userLimitOk = true
-      if (valid && userId && coupon!.rule?.usagePerUser) {
-        const userUses = await prisma.order.count({ where: { couponId: coupon!.id, userId } })
+      if (valid && verifiedUserId && coupon!.rule?.usagePerUser) {
+        const userUses = await prisma.order.count({ where: { couponId: coupon!.id, userId: verifiedUserId } })
         if (userUses >= coupon!.rule.usagePerUser) userLimitOk = false
       }
 
@@ -137,26 +158,26 @@ export async function POST(req: Request) {
       variantId: item.variantId,
       productId: item.productId,
       quantity: item.quantity,
-      price: Number(variantMap[item.variantId].product.price),
+      price: effectivePriceMap[item.variantId],
     }))
     const autoDiscount = await getBestAutoDiscount(cartItems, serverSubtotal).catch(() => null)
     const autoDiscountAmount = autoDiscount?.savingAmount || 0
 
-    // Validate loyalty points redemption
+    // Validate loyalty points redemption (use verifiedUserId — #5 IDOR fix)
     let serverLoyaltyDiscount = 0
-    if (userId && loyaltyPointsRedeemed > 0) {
-      const loyaltyAgg = await prisma.loyaltyPoint.aggregate({ where: { userId }, _sum: { points: true } })
-      const balance = loyaltyAgg._sum.points ?? 0
+    if (verifiedUserId && loyaltyPointsRedeemed > 0) {
+      const loyaltyAgg = await prisma.loyaltyPoint.aggregate({ where: { userId: verifiedUserId }, _sum: { points: true } })
+      const balance = Math.max(0, loyaltyAgg._sum.points ?? 0) // #18 floor at 0
       const redemptionRate = Number((await prisma.setting.findUnique({ where: { key: "loyalty_redemption_rate" } }))?.value || 100)
       const maxDiscount = Math.floor(balance / redemptionRate)
       serverLoyaltyDiscount = Math.min(loyaltyDiscount || 0, maxDiscount)
     }
 
-    // Validate store credit redemption
+    // Validate store credit redemption (use verifiedUserId — #5 IDOR fix)
     let serverCreditDiscount = 0
-    if (userId && storeCreditRedeemed > 0) {
-      const credit = await prisma.storeCredit.findUnique({ where: { userId } })
-      serverCreditDiscount = Math.min(storeCreditRedeemed, Number(credit?.balance ?? 0))
+    if (verifiedUserId && storeCreditRedeemed > 0) {
+      const credit = await prisma.storeCredit.findUnique({ where: { userId: verifiedUserId } })
+      serverCreditDiscount = Math.min(storeCreditRedeemed, Math.max(0, Number(credit?.balance ?? 0)))
     }
 
     // Validate gift card
@@ -166,7 +187,9 @@ export async function POST(req: Request) {
       validatedGiftCard = await prisma.giftCard.findUnique({ where: { code: giftCardCode } })
       if (validatedGiftCard && validatedGiftCard.isActive && Number(validatedGiftCard.balance) > 0 &&
           (!validatedGiftCard.expiresAt || new Date(validatedGiftCard.expiresAt) > new Date())) {
-        serverGiftCardDiscount = Math.min(clientGiftCardDiscount || Number(validatedGiftCard.balance), Number(validatedGiftCard.balance))
+        // Cap to card balance and to the pre-gift-card total (can't redeem more than the order costs)
+        const preTotalBeforeGiftCard = Math.max(0, serverSubtotal + (couponGrantsFreeShipping ? 0 : serverShippingCharge) + serverTaxAmount + serverGiftWrapCharge - autoDiscountAmount - serverLoyaltyDiscount - serverCreditDiscount - serverCouponDiscount)
+        serverGiftCardDiscount = Math.min(Number(validatedGiftCard.balance), preTotalBeforeGiftCard)
       }
     }
 
@@ -186,7 +209,9 @@ export async function POST(req: Request) {
       }
 
       const orderCount = await tx.order.count()
-      const orderNumber = `ORD-${new Date().getFullYear()}-${String(orderCount + 1).padStart(4, "0")}`
+      // Append a short random suffix to prevent duplicate order numbers under concurrent load
+      const suffix = Math.random().toString(36).slice(2, 5).toUpperCase()
+      const orderNumber = `ORD-${new Date().getFullYear()}-${String(orderCount + 1).padStart(4, "0")}-${suffix}`
 
       // Atomically increment coupon usedCount inside the transaction.
       // updateMany with the maxUses guard ensures concurrent orders can't both pass.
@@ -204,10 +229,49 @@ export async function POST(req: Request) {
         }
       }
 
+      // #3 Deduct loyalty points inside transaction to prevent double-spend
+      if (verifiedUserId && serverLoyaltyDiscount > 0) {
+        const redemptionRate = Number((await prisma.setting.findUnique({ where: { key: "loyalty_redemption_rate" } }))?.value || 100)
+        const pointsUsed = serverLoyaltyDiscount * redemptionRate
+        // Re-verify balance inside transaction (atomic check)
+        const loyaltyAgg = await tx.loyaltyPoint.aggregate({ where: { userId: verifiedUserId }, _sum: { points: true } })
+        const currentBalance = Math.max(0, loyaltyAgg._sum.points ?? 0)
+        if (currentBalance < loyaltyPointsRedeemed) {
+          throw new Error("Insufficient loyalty points")
+        }
+        await tx.loyaltyPoint.create({
+          data: { userId: verifiedUserId, points: -pointsUsed, type: "REDEEMED", description: `Redeemed at checkout`, orderId: undefined },
+        })
+      }
+
+      // #3 Deduct store credit inside transaction to prevent double-spend
+      if (verifiedUserId && serverCreditDiscount > 0) {
+        const credit = await tx.storeCredit.findUnique({ where: { userId: verifiedUserId } })
+        if (!credit || Number(credit.balance) < serverCreditDiscount) {
+          throw new Error("Insufficient store credit")
+        }
+        await tx.storeCredit.update({ where: { userId: verifiedUserId }, data: { balance: { decrement: serverCreditDiscount } } })
+        await tx.storeCreditTransaction.create({
+          data: { userId: verifiedUserId, storeCreditId: credit.id, amount: serverCreditDiscount, type: "DEBIT", reason: `Applied at checkout` },
+        })
+      }
+
+      // #4 Deduct gift card inside transaction to prevent double-spend
+      if (validatedGiftCard && serverGiftCardDiscount > 0) {
+        const card = await tx.giftCard.findUnique({ where: { id: validatedGiftCard.id } })
+        if (!card || Number(card.balance) < serverGiftCardDiscount) {
+          throw new Error("Insufficient gift card balance")
+        }
+        await tx.giftCard.update({ where: { id: card.id }, data: { balance: { decrement: serverGiftCardDiscount } } })
+        await tx.giftCardTransaction.create({
+          data: { giftCardId: card.id, amount: serverGiftCardDiscount, type: "REDEEM" },
+        })
+      }
+
       return tx.order.create({
         data: {
           orderNumber,
-          userId: userId || null,
+          userId: verifiedUserId,
           isGuest: isGuest || false,
           guestEmail: isGuest ? (guestEmail || null) : null,
           status: "PENDING",
@@ -237,7 +301,7 @@ export async function POST(req: Request) {
               productName: item.name,
               variantId: item.variantId,
               quantity: item.quantity,
-              price: Number(variantMap[item.variantId].product.price),
+              price: effectivePriceMap[item.variantId],
               size: item.size || "Default",
               color: item.color || "Default",
             })),
@@ -248,41 +312,9 @@ export async function POST(req: Request) {
 
     await logAudit({ action: "order.created", entityType: "Order", entityId: order.id, after: { orderNumber: order.orderNumber, total: serverTotal, paymentMethod } })
 
-    // Deduct loyalty points used
-    if (userId && serverLoyaltyDiscount > 0) {
-      const redemptionRate = Number((await prisma.setting.findUnique({ where: { key: "loyalty_redemption_rate" } }))?.value || 100)
-      const pointsUsed = serverLoyaltyDiscount * redemptionRate
-      prisma.loyaltyPoint.create({
-        data: { userId, points: -pointsUsed, type: "REDEEMED", description: `Redeemed for order ${order.orderNumber}`, orderId: order.id },
-      }).catch(() => {})
-    }
-
-    // Deduct store credit used
-    if (userId && serverCreditDiscount > 0) {
-      prisma.$transaction(async (tx) => {
-        const credit = await tx.storeCredit.findUnique({ where: { userId: userId! } })
-        if (!credit) return
-        await tx.storeCredit.update({ where: { userId: userId! }, data: { balance: { decrement: serverCreditDiscount } } })
-        await tx.storeCreditTransaction.create({
-          data: { userId: userId!, storeCreditId: credit.id, amount: serverCreditDiscount, type: "DEBIT", reason: `Applied to order ${order.orderNumber}`, orderId: order.id },
-        })
-      }).catch(() => {})
-    }
-
-    // Deduct gift card balance used
-    if (validatedGiftCard && serverGiftCardDiscount > 0) {
-      prisma.giftCard.update({
-        where: { id: validatedGiftCard.id },
-        data: { balance: { decrement: serverGiftCardDiscount } },
-      }).catch(() => {})
-      prisma.giftCardTransaction.create({
-        data: { giftCardId: validatedGiftCard.id, amount: serverGiftCardDiscount, type: "REDEEM", orderId: order.id },
-      }).catch(() => {})
-    }
-
     // Refresh customer segments after new order (fire-and-forget)
-    if (userId) {
-      refreshCustomerSegments(userId).catch(() => {})
+    if (verifiedUserId) {
+      refreshCustomerSegments(verifiedUserId).catch(() => {})
     }
 
     // Record affiliate conversion if referral cookie present
@@ -311,7 +343,7 @@ export async function POST(req: Request) {
     }
 
     // Send order confirmation email (fire-and-forget)
-    const toEmail = isGuest ? guestEmail : (await prisma.user.findUnique({ where: { id: userId || "" }, select: { email: true } }))?.email
+    const toEmail = isGuest ? guestEmail : (verifiedUserId ? (await prisma.user.findUnique({ where: { id: verifiedUserId }, select: { email: true } }))?.email : null)
     if (toEmail) {
       sendOrderConfirmation({
         to: toEmail,
@@ -322,11 +354,11 @@ export async function POST(req: Request) {
           size: item.size || "Default",
           color: item.color || "Default",
           quantity: item.quantity,
-          price: Number(variantMap[item.variantId].product.price),
+          price: effectivePriceMap[item.variantId],
         })),
         subtotal: serverSubtotal,
-        shippingCharge: serverShippingCharge,
-        discount: autoDiscountAmount,
+        shippingCharge: effectiveShippingCharge,
+        discount: autoDiscountAmount + serverCouponDiscount + serverLoyaltyDiscount + serverCreditDiscount + serverGiftCardDiscount,
         giftWrapCharge: serverGiftWrapCharge,
         total: serverTotal,
         paymentMethod,

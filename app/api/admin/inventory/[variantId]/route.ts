@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { requireAdmin } from "@/lib/adminAuth"
-import { sendLowStockAlert } from "@/lib/email"
+import { sendLowStockAlert, sendBackInStockAlert } from "@/lib/email"
 
 const LOW_STOCK_THRESHOLD = 5
 
@@ -23,10 +23,10 @@ export async function PATCH(
     const variant = await prisma.productVariant.update({
       where: { id: variantId },
       data: { stock },
-      include: { product: { select: { name: true } } },
+      include: { product: { select: { name: true, slug: true } } },
     })
 
-    // Fire low stock alert email if stock dropped to threshold or out of stock
+    // Low stock alert to admin
     if (stock <= LOW_STOCK_THRESHOLD) {
       sendLowStockAlert([{
         productName: variant.product.name,
@@ -35,6 +35,28 @@ export async function PATCH(
         stock,
         sku: variant.sku,
       }]).catch(() => {})
+    }
+
+    // Back-in-stock: notify waiting customers when stock goes from 0 → positive
+    if (stock > 0) {
+      const alerts = await prisma.stockAlert.findMany({
+        where: { variantId, notified: false },
+        select: { id: true, email: true },
+      })
+      if (alerts.length > 0) {
+        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://drip.com.bd"
+        const productUrl = `${siteUrl}/shop/${variant.product.slug}`
+        const variantLabel = `${variant.size} / ${variant.color}`
+        await Promise.all(
+          alerts.map(a =>
+            sendBackInStockAlert({ to: a.email, productName: variant.product.name, variantLabel, productUrl }).catch(() => {})
+          )
+        )
+        await prisma.stockAlert.updateMany({
+          where: { id: { in: alerts.map(a => a.id) } },
+          data: { notified: true },
+        })
+      }
     }
 
     return NextResponse.json({ variant })

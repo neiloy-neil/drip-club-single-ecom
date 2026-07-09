@@ -25,7 +25,8 @@ async function createTransport() {
     })
   }
 
-  // No SMTP configured — silent no-op transport
+  // No SMTP configured — log warning and use no-op transport
+  console.warn("[email] No SMTP configured. Emails will not be sent. Configure smtp_host/smtp_user/smtp_pass in Admin → Settings.")
   return nodemailer.createTransport({ jsonTransport: true })
 }
 
@@ -387,9 +388,22 @@ export async function sendStoreCreditIssued(data: {
   await sendMail(data.to, `৳${data.amount.toLocaleString()} store credit added to your account`, baseTemplate(store, content))
 }
 
+export async function sendBackInStockAlert({ to, productName, variantLabel, productUrl }: { to: string; productName: string; variantLabel: string; productUrl: string }) {
+  const store = await getStoreMeta()
+  const content = `
+    <h1 style="font-size:20px;font-weight:700;margin-bottom:6px">Good news — it's back!</h1>
+    <p class="muted">You asked us to let you know when <strong>${productName}</strong> (${variantLabel}) was back in stock. It's available now — grab it before it sells out again.</p>
+    <hr class="divider">
+    <a href="${productUrl}" class="btn">Shop now →</a>`
+  await sendMail(to, `${productName} is back in stock!`, baseTemplate(store, content))
+}
+
 export async function sendLowStockAlert(variants: { productName: string; size: string; color: string; stock: number; sku?: string | null }[]) {
   const store = await getStoreMeta()
-  const adminEmail = store.email
+  // Use dedicated admin notification email if configured, fall back to support email
+  const settingRows = await prisma.setting.findMany({ where: { key: { in: ["admin_notification_email"] } } })
+  const settingMap = Object.fromEntries(settingRows.map(r => [r.key, r.value]))
+  const adminEmail = settingMap.admin_notification_email || store.email
   const rows = variants.map(v =>
     `<tr><td style="padding:8px;border-bottom:1px solid #f0f0e8">${v.productName}</td><td style="padding:8px;border-bottom:1px solid #f0f0e8">${v.size} / ${v.color}</td><td style="padding:8px;border-bottom:1px solid #f0f0e8;font-family:monospace">${v.sku || "-"}</td><td style="padding:8px;border-bottom:1px solid #f0f0e8;font-weight:700;color:${v.stock === 0 ? "#a32d2d" : "#7a5c00"}">${v.stock === 0 ? "OUT OF STOCK" : `${v.stock} left`}</td></tr>`
   ).join("")
