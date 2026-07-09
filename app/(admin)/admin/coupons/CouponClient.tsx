@@ -29,6 +29,7 @@ type Coupon = {
 export function CouponClient({ data }: { data: Coupon[] }) {
   const router = useRouter()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [code, setCode] = useState("")
   const [type, setType] = useState("PERCENTAGE")
   const [value, setValue] = useState("")
@@ -39,40 +40,71 @@ export function CouponClient({ data }: { data: Coupon[] }) {
   const [buyQty, setBuyQty] = useState("2")
   const [getQty, setGetQty] = useState("1")
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const openEdit = (coupon: Coupon) => {
+    setEditingId(coupon.id)
+    setCode(coupon.code)
+    setType(coupon.type)
+    setValue(String(coupon.value))
+    setMinOrder(coupon.minOrderAmount ? String(coupon.minOrderAmount) : "")
+    setMaxUses(coupon.maxUses ? String(coupon.maxUses) : "")
+    setExpiresAt(coupon.expiresAt ? coupon.expiresAt.slice(0, 10) : "")
+    setBogoEnabled(false)
+    setIsDialogOpen(true)
+  }
+
+  const resetForm = () => {
+    setEditingId(null)
+    setCode(""); setValue(""); setMinOrder(""); setMaxUses(""); setExpiresAt("")
+    setBogoEnabled(false); setBuyQty("2"); setGetQty("1"); setType("PERCENTAGE")
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const res = await fetch("/api/admin/coupons", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          code,
-          type: bogoEnabled ? "FLAT" : type,
-          value: bogoEnabled ? 0 : parseFloat(value),
-          minOrderAmount: minOrder ? parseFloat(minOrder) : null,
-          maxUses: maxUses ? parseInt(maxUses) : null,
-          expiresAt: expiresAt || null,
-        }),
-      })
-      const couponData = await res.json()
-      if (!res.ok) {
-        toast.error(couponData.error || "Failed to create coupon")
-        return
-      }
-      if (bogoEnabled && couponData.id) {
-        await fetch("/api/admin/coupon-rules", {
+      let couponData: any
+      if (editingId) {
+        const res = await fetch(`/api/admin/coupons/${editingId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            value: parseFloat(value),
+            minOrderAmount: minOrder || null,
+            maxUses: maxUses || null,
+            expiresAt: expiresAt || null,
+          }),
+        })
+        couponData = await res.json()
+        if (!res.ok) { toast.error(couponData.error || "Failed to update coupon"); return }
+        toast.success("Coupon updated")
+      } else {
+        const res = await fetch("/api/admin/coupons", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ couponId: couponData.id, ruleType: "BOGO", buyQty: parseInt(buyQty), getQty: parseInt(getQty) }),
+          body: JSON.stringify({
+            code,
+            type: bogoEnabled ? "FLAT" : type,
+            value: bogoEnabled ? 0 : parseFloat(value),
+            minOrderAmount: minOrder ? parseFloat(minOrder) : null,
+            maxUses: maxUses ? parseInt(maxUses) : null,
+            expiresAt: expiresAt || null,
+          }),
         })
+        couponData = await res.json()
+        if (!res.ok) { toast.error(couponData.error || "Failed to create coupon"); return }
+        if (bogoEnabled && couponData.coupon?.id) {
+          await fetch("/api/admin/coupon-rules", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ couponId: couponData.coupon.id, ruleType: "BOGO", buyQty: parseInt(buyQty), getQty: parseInt(getQty) }),
+          })
+        }
+        toast.success("Coupon created")
       }
-      toast.success("Coupon created successfully")
       setIsDialogOpen(false)
-      setCode(""); setValue(""); setMinOrder(""); setMaxUses(""); setExpiresAt("")
-      setBogoEnabled(false); setBuyQty("2"); setGetQty("1")
+      resetForm()
       router.refresh()
     } catch {
-      toast.error("Error creating coupon")
+      toast.error("Error saving coupon")
     }
   }
 
@@ -111,24 +143,24 @@ export function CouponClient({ data }: { data: Coupon[] }) {
 
   return (
     <div className="space-y-4">
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm() }}>
         <DialogTrigger render={<Button>Create Coupon</Button>} />
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create New Coupon</DialogTitle>
+            <DialogTitle>{editingId ? "Edit Coupon" : "Create New Coupon"}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleCreate} className="space-y-4 mt-4">
+          <form onSubmit={handleSubmit} className="space-y-4 mt-4">
             <div>
               <label className="text-sm font-medium text-neutral-700">Code</label>
-              <Input required value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="e.g. SUMMER50" />
+              <Input required value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="e.g. SUMMER50" disabled={!!editingId} className={editingId ? "opacity-60" : ""} />
             </div>
-            <div className="flex items-center gap-3 p-3 border rounded-lg">
-              <input type="checkbox" id="bogo" checked={bogoEnabled} onChange={e => setBogoEnabled(e.target.checked)} className="w-4 h-4" />
-              <label htmlFor="bogo" className="text-sm font-medium text-neutral-700 cursor-pointer">
-                BOGO — Buy X Get Y Free
-              </label>
-            </div>
-            {bogoEnabled ? (
+            {!editingId && (
+              <div className="flex items-center gap-3 p-3 border rounded-lg">
+                <input type="checkbox" id="bogo" checked={bogoEnabled} onChange={e => setBogoEnabled(e.target.checked)} className="w-4 h-4" />
+                <label htmlFor="bogo" className="text-sm font-medium text-neutral-700 cursor-pointer">BOGO — Buy X Get Y Free</label>
+              </div>
+            )}
+            {!editingId && bogoEnabled ? (
               <div className="grid grid-cols-2 gap-3 p-3 bg-neutral-50 rounded-lg border">
                 <div>
                   <label className="text-xs font-medium text-neutral-600">Buy Qty (X)</label>
@@ -142,16 +174,18 @@ export function CouponClient({ data }: { data: Coupon[] }) {
               </div>
             ) : (
               <>
-                <div>
-                  <label className="text-sm font-medium text-neutral-700">Type</label>
-                  <Select value={type} onValueChange={(val) => setType(val || "PERCENTAGE")}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="PERCENTAGE">Percentage (%)</SelectItem>
-                      <SelectItem value="FLAT">Flat Amount (৳)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {!editingId && (
+                  <div>
+                    <label className="text-sm font-medium text-neutral-700">Type</label>
+                    <Select value={type} onValueChange={(val) => setType(val || "PERCENTAGE")}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="PERCENTAGE">Percentage (%)</SelectItem>
+                        <SelectItem value="FLAT">Flat Amount (৳)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div>
                   <label className="text-sm font-medium text-neutral-700">Value</label>
                   <Input required type="number" min="0" step="0.01" value={value} onChange={(e) => setValue(e.target.value)} />
@@ -209,6 +243,7 @@ export function CouponClient({ data }: { data: Coupon[] }) {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right space-x-2">
+                    <Button variant="outline" size="sm" onClick={() => openEdit(coupon)}>Edit</Button>
                     <Button variant="outline" size="sm" onClick={() => handleToggle(coupon.id, coupon.isActive)}>
                       {coupon.isActive ? "Disable" : "Enable"}
                     </Button>

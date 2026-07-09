@@ -11,17 +11,16 @@ export async function PATCH(
   try {
     const { id } = await params
     const body = await request.json()
-    const { isActive } = body
+    const { isActive, value, minOrderAmount, maxUses, expiresAt } = body
 
-    if (typeof isActive !== "boolean") {
-      return NextResponse.json({ error: "Invalid active status" }, { status: 400 })
-    }
+    const data: Record<string, any> = {}
+    if (typeof isActive === "boolean") data.isActive = isActive
+    if (value !== undefined) data.value = parseFloat(value)
+    if (minOrderAmount !== undefined) data.minOrderAmount = minOrderAmount ? parseFloat(minOrderAmount) : null
+    if (maxUses !== undefined) data.maxUses = maxUses ? parseInt(maxUses) : null
+    if (expiresAt !== undefined) data.expiresAt = expiresAt ? new Date(expiresAt) : null
 
-    const coupon = await prisma.coupon.update({
-      where: { id },
-      data: { isActive },
-    })
-
+    const coupon = await prisma.coupon.update({ where: { id }, data })
     return NextResponse.json({ coupon })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })

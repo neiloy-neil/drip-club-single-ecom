@@ -84,17 +84,29 @@ export async function POST(req: Request) {
 
     // Validate coupon server-side
     let serverCouponDiscount = 0
+    let couponGrantsFreeShipping = false
     let validatedCouponId: string | null = null
     if (couponId) {
       const coupon = await prisma.coupon.findUnique({
         where: { id: couponId },
         include: { rule: true },
       })
-      if (coupon && coupon.isActive &&
+      const valid = coupon && coupon.isActive &&
         !(coupon.expiresAt && new Date(coupon.expiresAt) < new Date()) &&
-        !(coupon.maxUses && coupon.usedCount >= coupon.maxUses)) {
-        const rule = coupon.rule
-        if (rule?.ruleType === "BOGO") {
+        !(coupon.maxUses && coupon.usedCount >= coupon.maxUses)
+
+      // Per-user usage limit check
+      let userLimitOk = true
+      if (valid && userId && coupon!.rule?.usagePerUser) {
+        const userUses = await prisma.order.count({ where: { couponId: coupon!.id, userId } })
+        if (userUses >= coupon!.rule.usagePerUser) userLimitOk = false
+      }
+
+      if (valid && userLimitOk) {
+        const rule = coupon!.rule
+        if (rule?.ruleType === "FREE_SHIPPING") {
+          couponGrantsFreeShipping = true
+        } else if (rule?.ruleType === "BOGO") {
           const buyQty = rule.buyQty ?? 1
           const getQty = rule.getQty ?? 1
           const units: number[] = []
@@ -107,17 +119,18 @@ export async function POST(req: Request) {
           const freeGroups = Math.floor(units.length / (buyQty + getQty))
           const freeCount = freeGroups * getQty
           serverCouponDiscount = units.slice(0, freeCount).reduce((s: number, p: number) => s + p, 0)
-        } else if (coupon.type === "PERCENTAGE") {
-          serverCouponDiscount = Math.round((serverSubtotal * Number(coupon.value)) / 100)
+        } else if (coupon!.type === "PERCENTAGE") {
+          serverCouponDiscount = Math.round((serverSubtotal * Number(coupon!.value)) / 100)
           if (rule?.maxDiscount) serverCouponDiscount = Math.min(serverCouponDiscount, Number(rule.maxDiscount))
-        } else if (coupon.type === "FLAT") {
-          serverCouponDiscount = Math.min(Number(coupon.value), serverSubtotal)
+        } else if (coupon!.type === "FLAT") {
+          serverCouponDiscount = Math.min(Number(coupon!.value), serverSubtotal)
         }
-        // Cap at what the client claimed (prevents double-discount exploitation)
-        serverCouponDiscount = Math.min(serverCouponDiscount, clientCouponDiscount || 0)
-        validatedCouponId = coupon.id
+        validatedCouponId = coupon!.id
       }
     }
+
+    // FREE_SHIPPING coupon zeroes the shipping charge
+    const effectiveShippingCharge = couponGrantsFreeShipping ? 0 : serverShippingCharge
 
     // Auto discount (bulk/tiered) — server-side validation, never trust client
     const cartItems = items.map((item: any) => ({
@@ -157,7 +170,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const serverTotal = Math.max(0, serverSubtotal + serverShippingCharge + serverTaxAmount + serverGiftWrapCharge - autoDiscountAmount - serverLoyaltyDiscount - serverCreditDiscount - serverCouponDiscount - serverGiftCardDiscount)
+    const serverTotal = Math.max(0, serverSubtotal + effectiveShippingCharge + serverTaxAmount + serverGiftWrapCharge - autoDiscountAmount - serverLoyaltyDiscount - serverCreditDiscount - serverCouponDiscount - serverGiftCardDiscount)
 
     const order = await prisma.$transaction(async (tx) => {
       // Re-check stock inside transaction to prevent race conditions
@@ -175,6 +188,22 @@ export async function POST(req: Request) {
       const orderCount = await tx.order.count()
       const orderNumber = `ORD-${new Date().getFullYear()}-${String(orderCount + 1).padStart(4, "0")}`
 
+      // Atomically increment coupon usedCount inside the transaction.
+      // updateMany with the maxUses guard ensures concurrent orders can't both pass.
+      if (validatedCouponId) {
+        const couponForUpdate = await tx.coupon.findUnique({ where: { id: validatedCouponId }, select: { maxUses: true } })
+        const affected = await tx.coupon.updateMany({
+          where: {
+            id: validatedCouponId,
+            ...(couponForUpdate?.maxUses != null ? { usedCount: { lt: couponForUpdate.maxUses } } : {}),
+          },
+          data: { usedCount: { increment: 1 } },
+        })
+        if (affected.count === 0 && couponForUpdate?.maxUses != null) {
+          throw new Error("Coupon usage limit reached — please try without the coupon")
+        }
+      }
+
       return tx.order.create({
         data: {
           orderNumber,
@@ -187,7 +216,7 @@ export async function POST(req: Request) {
           depositAmount,
           total: serverTotal,
           subtotal: serverSubtotal,
-          shippingCharge: serverShippingCharge,
+          shippingCharge: effectiveShippingCharge,
           discount: Math.max(0, autoDiscountAmount + serverCouponDiscount),
           couponId: validatedCouponId || null,
           deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
@@ -218,11 +247,6 @@ export async function POST(req: Request) {
     })
 
     await logAudit({ action: "order.created", entityType: "Order", entityId: order.id, after: { orderNumber: order.orderNumber, total: serverTotal, paymentMethod } })
-
-    // Increment coupon usage count
-    if (validatedCouponId) {
-      prisma.coupon.update({ where: { id: validatedCouponId }, data: { usedCount: { increment: 1 } } }).catch(() => {})
-    }
 
     // Deduct loyalty points used
     if (userId && serverLoyaltyDiscount > 0) {

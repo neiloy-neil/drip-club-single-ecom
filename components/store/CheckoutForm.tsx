@@ -84,7 +84,7 @@ export default function CheckoutForm({
 
   // Coupon
   const [couponCode, setCouponCode] = useState("")
-  const [appliedCoupon, setAppliedCoupon] = useState<{ couponId: string; couponCode: string; discount: number; message: string } | null>(null)
+  const [appliedCoupon, setAppliedCoupon] = useState<{ couponId: string; couponCode: string; discount: number; message: string; freeShipping?: boolean } | null>(null)
   const [couponError, setCouponError] = useState("")
   const [couponLoading, setCouponLoading] = useState(false)
 
@@ -114,7 +114,7 @@ export default function CheckoutForm({
   }, [userId])
 
   const subtotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0)
-  const shippingCharge = subtotal >= freeShippingThreshold ? 0 : shippingChargeAmount
+  const shippingCharge = (subtotal >= freeShippingThreshold || appliedCoupon?.freeShipping) ? 0 : shippingChargeAmount
   const taxAmount = taxEnabled ? Math.round((subtotal * taxRate) / 100) : 0
   const giftWrapAmount = giftWrap ? giftWrapCharge : 0
   const loyaltyDiscount = redeemPoints ? Math.min(pointsToRedeem, loyaltyMaxDiscount) : 0
@@ -713,6 +713,12 @@ export default function CheckoutForm({
               <div className="flex justify-between text-drip-text-muted">
                 <span>Store Credit</span>
                 <span className="font-mono text-drip-success">−৳{creditDiscount.toLocaleString()}</span>
+              </div>
+            )}
+            {appliedCoupon?.freeShipping && (
+              <div className="flex justify-between text-drip-success text-sm">
+                <span>Coupon ({appliedCoupon.couponCode})</span>
+                <span className="font-mono">Free shipping</span>
               </div>
             )}
             {couponDiscount > 0 && (

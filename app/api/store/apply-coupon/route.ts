@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { auth } from "@/lib/auth"
 
 export async function POST(req: Request) {
   try {
@@ -21,6 +22,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Coupon usage limit reached" }, { status: 400 })
     }
 
+    // Per-user usage limit
+    const session = await auth()
+    if (session?.user?.id && coupon.rule?.usagePerUser) {
+      const userUses = await prisma.order.count({
+        where: { couponId: coupon.id, userId: session.user.id },
+      })
+      if (userUses >= coupon.rule.usagePerUser) {
+        return NextResponse.json({ error: "You have already used this coupon" }, { status: 400 })
+      }
+    }
+
     const subtotal = (items || []).reduce((sum: number, item: any) => sum + item.price * item.quantity, 0)
 
     if (coupon.minOrderAmount && subtotal < Number(coupon.minOrderAmount)) {
@@ -32,12 +44,12 @@ export async function POST(req: Request) {
 
     let discount = 0
     let message = ""
+    let freeShipping = false
     const rule = coupon.rule
 
     if (rule?.ruleType === "BOGO") {
       const buyQty = rule.buyQty ?? 1
       const getQty = rule.getQty ?? 1
-      // Flatten all cart units, sort ascending by price (cheapest first)
       const units: number[] = []
       for (const item of (items || [])) {
         for (let i = 0; i < (item.quantity || 1); i++) {
@@ -52,8 +64,8 @@ export async function POST(req: Request) {
         ? `BOGO: ${freeCount} item${freeCount > 1 ? "s" : ""} free — saving ৳${discount}`
         : `Add ${buyQty + getQty} items to activate BOGO`
     } else if (rule?.ruleType === "FREE_SHIPPING") {
-      discount = 0
-      message = "Free shipping will be applied at checkout"
+      freeShipping = true
+      message = "Free shipping applied"
     } else if (coupon.type === "PERCENTAGE") {
       discount = Math.round((subtotal * Number(coupon.value)) / 100)
       if (rule?.maxDiscount) discount = Math.min(discount, Number(rule.maxDiscount))
@@ -63,7 +75,7 @@ export async function POST(req: Request) {
       message = `৳${coupon.value} discount applied`
     }
 
-    return NextResponse.json({ discount, couponId: coupon.id, couponCode: coupon.code, message })
+    return NextResponse.json({ discount, couponId: coupon.id, couponCode: coupon.code, message, freeShipping })
   } catch {
     return NextResponse.json({ error: "Failed to apply coupon" }, { status: 500 })
   }
