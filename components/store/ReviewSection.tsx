@@ -85,7 +85,7 @@ export default function ReviewSection({ productId }: { productId: string }) {
       for (const file of photos) {
         const fd = new FormData()
         fd.append("file", file)
-        const up = await fetch("/api/admin/upload", { method: "POST", body: fd })
+        const up = await fetch("/api/store/upload", { method: "POST", body: fd })
         if (up.ok) {
           const { url } = await up.json()
           mediaUrls.push(url)
@@ -101,7 +101,7 @@ export default function ReviewSection({ productId }: { productId: string }) {
       if (!res.ok) {
         toast.error(data.error || "Failed to submit review")
       } else {
-        toast.success("Thanks for your review!")
+        toast.success("Thanks! Your review is pending approval and will appear shortly.")
         setShowForm(false)
         setRating(0)
         setComment("")

@@ -37,6 +37,7 @@ const navGroups: NavGroup[] = [
       { href: "/admin/orders", icon: ShoppingCart, label: "All Orders" },
       { href: "/admin/orders/new", icon: PlusCircle, label: "New Order" },
       { href: "/admin/returns", icon: RotateCcw, label: "Returns & RMA" },
+      { href: "/admin/reviews", icon: MessageSquare, label: "Reviews" },
       { href: "/admin/abandoned-carts", icon: ShoppingBasket, label: "Abandoned Carts" },
     ],
   },

@@ -8,7 +8,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const [reviews, agg] = await Promise.all([
     prisma.review.findMany({
       where: { productId, isApproved: true },
-      include: { user: { select: { name: true } } },
+      include: { user: { select: { name: true } }, media: true },
       orderBy: { createdAt: "desc" },
     }),
     prisma.review.aggregate({
@@ -63,7 +63,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       productId,
       rating: numRating,
       comment: comment?.trim() || null,
-      isApproved: true,
+      isApproved: false,
     },
     update: {
       rating: numRating,
